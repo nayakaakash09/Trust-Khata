@@ -41,7 +41,7 @@ const DEMO_USERS = {
   }
 };
 
-function getStoredUsers() {
+export function getStoredUsers() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_USERS);
     if (raw) return { ...DEMO_USERS, ...JSON.parse(raw) };
@@ -49,13 +49,48 @@ function getStoredUsers() {
   return DEMO_USERS;
 }
 
-function saveStoredUser(user) {
+export function saveStoredUser(user) {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_USERS);
     const existing = raw ? JSON.parse(raw) : {};
     existing[user.username] = user;
+    if (user.phone) {
+      existing[user.phone] = user;
+    }
     localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(existing));
   } catch (e) {}
+}
+
+export function getOrCreateCustomer(name, phone) {
+  const users = getStoredUsers();
+  const cleanPhone = (phone || '').trim().replace(/\D/g, '');
+  const cleanName = (name || '').trim();
+  
+  // Look up existing customer by phone or name
+  let found = Object.values(users).find(u => 
+    (cleanPhone && u.phone && u.phone.replace(/\D/g, '') === cleanPhone) ||
+    (cleanName && u.name && u.name.toLowerCase() === cleanName.toLowerCase())
+  );
+
+  if (!found) {
+    const username = cleanPhone ? `cust_${cleanPhone.slice(-6)}` : `cust_${Date.now().toString().slice(-6)}`;
+    found = {
+      id: Date.now(),
+      username: username,
+      name: cleanName || (cleanPhone ? `Customer (${cleanPhone.slice(-4)})` : 'Customer'),
+      phone: cleanPhone || '9876543210',
+      role: 'CUSTOMER',
+      customer_profile: {
+        address: 'Local Resident'
+      }
+    };
+    saveStoredUser(found);
+  } else if (cleanName && found.name !== cleanName) {
+    found.name = cleanName;
+    saveStoredUser(found);
+  }
+
+  return found;
 }
 
 
@@ -279,20 +314,51 @@ function formatTxWithQR(tx) {
     verification_url: `/verify/${tx.secure_token}`
   };
 }
-
 export const mockBackend = {
   login: async (credentials) => {
-    const rawUsername = (credentials.username || 'sharma_kirana').trim().toLowerCase();
+    const rawInput = (credentials.username || '').trim().toLowerCase();
+    const rawPhone = (credentials.phone || '').trim().replace(/\D/g, '');
+    const rawName = (credentials.name || '').trim();
     const users = getStoredUsers();
-    const matchedKey = Object.keys(users).find(k => k.toLowerCase() === rawUsername);
-    const user = (matchedKey ? users[matchedKey] : null) || {
-      id: 99,
-      username: rawUsername,
-      name: rawUsername.replace(/[_.-]/g, ' ').toUpperCase(),
-      role: (rawUsername.includes('vendor') || rawUsername.includes('shop') || rawUsername === 'sharma_kirana') ? 'VENDOR' : 'CUSTOMER',
-      vendor_profile: { shop_name: `${rawUsername}'s Store`, upi_id: `${rawUsername}@upi` },
-      customer_profile: { address: 'Local Resident' }
-    };
+    
+    const isPhoneInput = /^\d{10}$/.test(rawInput);
+    const searchPhone = rawPhone || (isPhoneInput ? rawInput : '');
+    
+    // Look up by username, phone, or name
+    let user = Object.values(users).find(u => {
+      const uPhone = (u.phone || '').replace(/\D/g, '');
+      return (rawInput && u.username && u.username.toLowerCase() === rawInput) ||
+             (searchPhone && uPhone && uPhone === searchPhone) ||
+             (rawName && u.name && u.name.toLowerCase() === rawName.toLowerCase());
+    });
+
+    if (!user) {
+      const isVendor = rawInput.includes('vendor') || rawInput.includes('shop') || rawInput === 'sharma_kirana';
+      user = {
+        id: Date.now(),
+        username: rawInput || (searchPhone ? `cust_${searchPhone.slice(-6)}` : `cust_${Date.now().toString().slice(-6)}`),
+        name: rawName || (rawInput && !isPhoneInput ? rawInput.replace(/[_.-]/g, ' ').toUpperCase() : (searchPhone ? `Customer (${searchPhone.slice(-4)})` : 'Customer')),
+        phone: searchPhone || '9876543210',
+        role: isVendor ? 'VENDOR' : 'CUSTOMER',
+        vendor_profile: isVendor ? { shop_name: `${rawInput || 'My'}'s Store`, upi_id: `${rawInput || 'store'}@upi` } : undefined,
+        customer_profile: !isVendor ? { address: 'Local Resident' } : undefined
+      };
+      saveStoredUser(user);
+    } else {
+      let updated = false;
+      if (rawName && user.name !== rawName) {
+        user.name = rawName;
+        updated = true;
+      }
+      if (searchPhone && (!user.phone || user.phone === '9876543210')) {
+        user.phone = searchPhone;
+        updated = true;
+      }
+      if (updated) {
+        saveStoredUser(user);
+      }
+    }
+
     return {
       access: 'mock-jwt-token-' + Date.now(),
       refresh: 'mock-refresh-token-' + Date.now(),
@@ -323,12 +389,14 @@ export const mockBackend = {
 
     // If user is logged in as CUSTOMER and not asking for all transactions, scope to customer
     if (activeUser && activeUser.role === 'CUSTOMER' && !params.all) {
-      txs = txs.filter(t => 
-        t.customer_phone === activeUser.phone ||
-        t.customer_name === activeUser.name ||
-        t.customer === activeUser.id ||
-        (!t.customer_name && t.status === 'PENDING')
-      );
+      const userPhoneClean = (activeUser.phone || '').replace(/\D/g, '');
+      txs = txs.filter(t => {
+        const txPhoneClean = (t.customer_phone || '').replace(/\D/g, '');
+        return (userPhoneClean && txPhoneClean && userPhoneClean === txPhoneClean) ||
+               (activeUser.name && t.customer_name && t.customer_name.toLowerCase() === activeUser.name.toLowerCase()) ||
+               (activeUser.id && t.customer === activeUser.id) ||
+               (!t.customer_name && t.status === 'PENDING');
+      });
     }
 
     if (status) {
@@ -358,6 +426,17 @@ export const mockBackend = {
     const token = encodeBillToken(data, newId);
     const amountVal = Number(data.amount).toFixed(2);
 
+    let custId = null;
+    let custName = (data.customer_name || '').trim();
+    let custPhone = (data.customer_phone || '').trim();
+
+    if (custPhone || custName) {
+      const cust = getOrCreateCustomer(custName, custPhone);
+      custId = cust.id;
+      custName = cust.name;
+      custPhone = cust.phone;
+    }
+
     const newTx = {
       id: newId,
       secure_token: token,
@@ -366,9 +445,9 @@ export const mockBackend = {
       vendor_phone: '9876543210',
       shop_name: 'Sharma Kirana & General Store',
       upi_id: 'sharma.kirana@oksbi',
-      customer: null,
-      customer_name: data.customer_name || '',
-      customer_phone: data.customer_phone || '',
+      customer: custId,
+      customer_name: custName,
+      customer_phone: custPhone,
       amount: amountVal,
       description: data.description || 'General Items',
       status: 'PENDING',
@@ -377,7 +456,7 @@ export const mockBackend = {
       remaining_balance: amountVal,
       payments: [],
       customer_previous_balance: '0.00',
-      is_claimed: false,
+      is_claimed: Boolean(custName || custPhone),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -620,15 +699,26 @@ export const mockBackend = {
 
     const tx = txs[idx];
     const activeUser = mockBackend.getActiveUser();
-    const custName = customerData.customer_name || (activeUser?.role === 'CUSTOMER' ? activeUser.name : 'Rahul Verma');
-    const custPhone = customerData.customer_phone || (activeUser?.role === 'CUSTOMER' ? activeUser.phone : '9812345678');
-    const custId = customerData.customer || (activeUser?.role === 'CUSTOMER' ? activeUser.id : 2);
+    
+    let cust = null;
+    if (customerData.customer_name || customerData.customer_phone) {
+      cust = getOrCreateCustomer(customerData.customer_name, customerData.customer_phone);
+    } else if (activeUser && activeUser.role === 'CUSTOMER') {
+      cust = activeUser;
+    } else {
+      cust = getOrCreateCustomer(customerData.name || 'Customer', customerData.phone || '9876500000');
+    }
 
-    tx.customer = custId;
-    tx.customer_name = custName;
-    tx.customer_phone = custPhone;
+    tx.customer = cust.id;
+    tx.customer_name = cust.name;
+    tx.customer_phone = cust.phone;
     tx.is_claimed = true;
-    tx.customer_previous_balance = '2100.00';
+    
+    // Dynamic previous balance calculation for this customer
+    const prevBal = txs
+      .filter(t => t.id !== tx.id && t.status === 'ACCEPTED' && (t.customer_phone === cust.phone || t.customer === cust.id))
+      .reduce((acc, t) => acc + Number(t.remaining_balance || 0), 0);
+    tx.customer_previous_balance = prevBal.toFixed(2);
     tx.updated_at = new Date().toISOString();
 
     txs[idx] = tx;
@@ -644,11 +734,12 @@ export const mockBackend = {
 
     return {
       message: `Bill linked to ${tx.customer_name} successfully.`,
-      transaction: formatTxWithQR(tx)
+      transaction: formatTxWithQR(tx),
+      customer: cust
     };
   },
 
-  respond: async (token, action, disputeReason = '') => {
+  respond: async (token, action, disputeReason = '', customerData = null) => {
     const cleanToken = cleanTokenStr(token);
     let txs = getStoredTransactions();
     let idx = txs.findIndex(t => t.secure_token === cleanToken || String(t.id) === cleanToken);
@@ -674,11 +765,20 @@ export const mockBackend = {
     }
 
     const activeUser = mockBackend.getActiveUser();
-    if (!tx.customer_name) {
-      tx.customer = (activeUser?.role === 'CUSTOMER' ? activeUser.id : 2);
-      tx.customer_name = (activeUser?.role === 'CUSTOMER' ? activeUser.name : 'Rahul Verma');
-      tx.customer_phone = (activeUser?.role === 'CUSTOMER' ? activeUser.phone : '9812345678');
+    let cust = null;
+    if (customerData && (customerData.customer_name || customerData.customer_phone)) {
+      cust = getOrCreateCustomer(customerData.customer_name, customerData.customer_phone);
+    } else if (tx.customer_name && tx.customer_phone) {
+      cust = getOrCreateCustomer(tx.customer_name, tx.customer_phone);
+    } else if (activeUser && activeUser.role === 'CUSTOMER') {
+      cust = activeUser;
+    } else {
+      cust = getOrCreateCustomer('Customer', '9876500000');
     }
+
+    tx.customer = cust.id;
+    tx.customer_name = cust.name;
+    tx.customer_phone = cust.phone;
     tx.is_claimed = true;
     tx.updated_at = new Date().toISOString();
 
@@ -712,7 +812,8 @@ export const mockBackend = {
 
     return {
       message: `Bill ${action.toLowerCase()}ed successfully!`,
-      transaction: formatTxWithQR(tx)
+      transaction: formatTxWithQR(tx),
+      customer: cust
     };
   },
 

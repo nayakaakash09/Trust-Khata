@@ -325,13 +325,13 @@ export default function Login() {
             )}
 
             <div style={{ marginBottom: '14px' }}>
-              <label className="form-label">Username</label>
+              <label className="form-label">{isRegister ? 'Username' : 'Mobile Number or Username'}</label>
               <input
                 type="text"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 className="form-input"
-                placeholder="Choose a username"
+                placeholder={isRegister ? 'Choose a unique username' : 'e.g. 9876543210 or username'}
                 required
               />
             </div>

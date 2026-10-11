@@ -19,6 +19,9 @@ export default function CreateTransaction() {
   const navigate = useNavigate();
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [showCustomerFields, setShowCustomerFields] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [createdTransaction, setCreatedTransaction] = useState(null);
@@ -72,12 +75,11 @@ export default function CreateTransaction() {
 
     setLoading(true);
     try {
-      // Vendor enters ONLY amount and product details! No customer details required.
       const res = await api.transactions.create({
         amount: val,
         description: description.trim(),
-        customer_name: '',
-        customer_phone: ''
+        customer_name: customerName.trim(),
+        customer_phone: customerPhone.trim().replace(/\D/g, '')
       });
 
       // Show generated live QR Station immediately
@@ -303,6 +305,69 @@ export default function CreateTransaction() {
                 })}
               </div>
             </div>
+          </div>
+
+          {/* Optional Customer Pre-assignment */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '12px',
+            padding: '14px 16px',
+            marginBottom: '24px'
+          }}>
+            <div 
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} 
+              onClick={() => setShowCustomerFields(!showCustomerFields)}
+            >
+              <div>
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#e2e8f0' }}>
+                  Target Customer (Optional)
+                </span>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '2px 0 0' }}>
+                  {showCustomerFields 
+                    ? 'Pre-fill customer phone/name, or leave blank for open walk-in counter QR' 
+                    : 'Tap to tag customer (or leave blank for walk-in QR)'}
+                </p>
+              </div>
+              <span className="kb-pill" style={{ 
+                background: showCustomerFields ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.05)', 
+                color: showCustomerFields ? '#38bdf8' : '#94a3b8' 
+              }}>
+                {showCustomerFields ? 'Collapse' : '+ Tag Customer'}
+              </span>
+            </div>
+
+            {showCustomerFields && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '14px', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>
+                    Customer Mobile Number
+                  </label>
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    placeholder="10-digit number"
+                    value={customerPhone}
+                    onChange={e => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
+                    className="form-input"
+                    style={{ fontSize: '0.85rem', padding: '10px 12px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>
+                    Customer Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Vikram Singh"
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                    className="form-input"
+                    style={{ fontSize: '0.85rem', padding: '10px 12px' }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Big CTA Button */}

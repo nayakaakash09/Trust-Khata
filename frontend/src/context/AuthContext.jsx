@@ -53,14 +53,19 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const quickLoginAs = async (roleType) => {
-    if (roleType === 'vendor') {
-      return await login('sharma_kirana', 'password123');
-    } else if (roleType === 'customer1') {
-      return await login('rahul_v', 'password123');
-    } else if (roleType === 'customer2') {
-      return await login('priya_s', 'password123');
-    }
+  const loginCustomer = async (name, phone) => {
+    const cleanPhone = (phone || '').trim().replace(/\D/g, '');
+    const cleanName = (name || '').trim();
+    const res = await api.auth.login({
+      username: cleanPhone || `cust_${Date.now().toString().slice(-6)}`,
+      phone: cleanPhone,
+      name: cleanName
+    });
+    setAuthToken(res.access);
+    localStorage.setItem('refresh_token', res.refresh);
+    localStorage.setItem('user_info', JSON.stringify(res.user));
+    setUser(res.user);
+    return res.user;
   };
 
   return (
@@ -72,7 +77,8 @@ export const AuthProvider = ({ children }) => {
       login,
       register,
       logout,
-      quickLoginAs
+      quickLoginAs,
+      loginCustomer
     }}>
       {children}
     </AuthContext.Provider>

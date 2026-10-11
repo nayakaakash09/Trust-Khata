@@ -122,18 +122,18 @@ export default function LandingPage() {
             </div>
 
             <span className="kb-pill" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid #10b981', marginBottom: '8px' }}>
-              MERCHANT / VENDOR PORTAL
+              MERCHANT / SHOPKEEPER
             </span>
 
             <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>
-              Sharma Kirana Store
+              Shopkeeper Portal
             </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5', marginBottom: '20px' }}>
-              Track outstanding dues (<strong>YOU WILL GET: ₹2,100</strong>), generate quick credit QR bills with zero customer data entry, and record UPI or cash settlements.
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5', marginBottom: '18px' }}>
+              Generate instant credit QR bills at counter, manage all customer credit books, track receivables, and log UPI or cash settlements.
             </p>
 
             <button
-              onClick={handleLaunchVendor}
+              onClick={() => navigate('/vendor')}
               className="btn-primary"
               style={{
                 width: '100%',
@@ -142,11 +142,29 @@ export default function LandingPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '8px',
+                marginBottom: '8px'
               }}
             >
-              <span>1-Click Test as Shopkeeper</span>
+              <span>Open Merchant Portal</span>
               <ArrowRight size={17} />
+            </button>
+
+            <button
+              onClick={handleLaunchVendor}
+              style={{
+                width: '100%',
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '8px',
+                color: '#94a3b8',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                padding: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              ⚡ Evaluator 1-Click: Sharma Kirana
             </button>
           </div>
 
@@ -183,14 +201,14 @@ export default function LandingPage() {
             </span>
 
             <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>
-              Rahul Verma
+              Customer Passbook
             </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5', marginBottom: '20px' }}>
-              Inspect your verified credit passbook (<strong>YOU WILL PAY: ₹2,100</strong>), scan merchant QR bills with real-time camera decoding, and approve or dispute entries.
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5', marginBottom: '18px' }}>
+              Access your digital credit passbook with your mobile number, scan shop QR codes with camera, and verify bills in real time.
             </p>
 
             <button
-              onClick={handleLaunchCustomer}
+              onClick={() => navigate('/customer')}
               className="btn-primary"
               style={{
                 width: '100%',
@@ -201,11 +219,29 @@ export default function LandingPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '8px',
+                marginBottom: '8px'
               }}
             >
-              <span>1-Click Test as Customer</span>
+              <span>Open Customer Passbook</span>
               <ArrowRight size={17} />
+            </button>
+
+            <button
+              onClick={handleLaunchCustomer}
+              style={{
+                width: '100%',
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '8px',
+                color: '#94a3b8',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                padding: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              ⚡ Evaluator 1-Click: Rahul Verma
             </button>
           </div>
         </div>

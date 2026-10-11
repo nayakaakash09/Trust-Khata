@@ -137,9 +137,8 @@ export default function QRModal({ transaction, onClose }) {
     }
   };
 
-  const handleOpenCustomerScreen = async () => {
+  const handleOpenCustomerScreen = () => {
     onClose();
-    await quickLoginAs('customer1');
     navigate(`/verify/${token}`);
   };
 

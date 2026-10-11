@@ -62,11 +62,13 @@ export default function QRScannerPage() {
 
     setClaiming(true);
     try {
-      if (!isAuthenticated || user?.role !== 'CUSTOMER') {
-        await quickLoginAs('customer1');
+      if (isAuthenticated && user?.role === 'CUSTOMER') {
+        // If already logged in as a real customer, claim bill under their active profile
+        await api.transactions.claim(token, {
+          customer_name: user.name,
+          customer_phone: user.phone
+        });
       }
-      // Explicitly claim/link customer so vendor's screen shows the customer immediately!
-      await api.transactions.claim(token);
     } catch (e) {
       // Continue to verify screen
     } finally {

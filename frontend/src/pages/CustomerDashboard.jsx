@@ -14,21 +14,27 @@ import {
   ArrowRight,
   Layers,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  User,
+  Phone,
+  Edit3
 } from 'lucide-react';
+
 export default function CustomerDashboard() {
-  const { user, quickLoginAs } = useAuth();
+  const { user, loginCustomer, quickLoginAs } = useAuth();
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lookupPhone, setLookupPhone] = useState('');
+  const [lookupName, setLookupName] = useState('');
+  const [switching, setSwitching] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const fetchData = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
     try {
-      if (user?.role !== 'CUSTOMER') {
-        await quickLoginAs('customer1');
-      }
       const [sumData, txData] = await Promise.all([
         api.transactions.getSummary(),
         api.transactions.list()
@@ -43,12 +49,209 @@ export default function CustomerDashboard() {
   };
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(() => fetchData(true), 3000);
-    return () => clearInterval(interval);
-  }, []);
+    if (user?.role === 'CUSTOMER' && !switching) {
+      fetchData();
+      const interval = setInterval(() => fetchData(true), 3000);
+      return () => clearInterval(interval);
+    } else {
+      setLoading(false);
+    }
+  }, [user, switching]);
+
+  const handleLookupSubmit = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    const cleanPhone = lookupPhone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      setFormError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await loginCustomer(lookupName.trim() || `Customer (${cleanPhone.slice(-4)})`, cleanPhone);
+      setSwitching(false);
+    } catch (err) {
+      setFormError(err.message || 'Failed to access passbook.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDemoSelect = async (roleKey) => {
+    setSubmitting(true);
+    try {
+      await quickLoginAs(roleKey);
+      setSwitching(false);
+    } catch (err) {
+      console.error('Demo login failed:', err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const pendingTransactions = transactions.filter(tx => tx.status === 'PENDING');
+
+  if (!user || user?.role !== 'CUSTOMER' || switching) {
+    return (
+      <div style={{ maxWidth: '480px', margin: '40px auto', padding: '24px 16px' }}>
+        <div className="kb-card" style={{ padding: '32px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <div style={{
+              width: '54px',
+              height: '54px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              margin: '0 auto 14px',
+              boxShadow: '0 6px 20px rgba(99, 102, 241, 0.35)'
+            }}>
+              <User size={28} />
+            </div>
+            <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#ffffff', marginBottom: '6px' }}>
+              Customer Khata Passbook
+            </h2>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Enter your mobile number to view your credit dues, bills, and payment records across all local shops.
+            </p>
+          </div>
+
+          <form onSubmit={handleLookupSubmit}>
+            <div style={{ marginBottom: '16px' }}>
+              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1' }}>
+                YOUR MOBILE NUMBER <span style={{ color: '#f87171' }}>*</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>
+                  <Phone size={16} />
+                </div>
+                <input
+                  type="tel"
+                  maxLength={10}
+                  placeholder="10-digit number (e.g. 9876501234)"
+                  value={lookupPhone}
+                  onChange={e => {
+                    setLookupPhone(e.target.value.replace(/\D/g, ''));
+                    setFormError('');
+                  }}
+                  className="form-input"
+                  style={{ fontSize: '0.95rem', padding: '12px 12px 12px 38px' }}
+                  required
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1' }}>
+                YOUR FULL NAME (OPTIONAL)
+              </label>
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>
+                  <User size={16} />
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. Vikram Singh"
+                  value={lookupName}
+                  onChange={e => setLookupName(e.target.value)}
+                  className="form-input"
+                  style={{ fontSize: '0.95rem', padding: '12px 12px 12px 38px' }}
+                />
+              </div>
+            </div>
+
+            {formError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                color: '#f87171',
+                fontSize: '0.85rem',
+                marginBottom: '16px'
+              }}>
+                {formError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="btn-primary"
+              style={{
+                width: '100%',
+                padding: '14px',
+                fontSize: '1rem',
+                fontWeight: 800,
+                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                boxShadow: '0 4px 18px rgba(99, 102, 241, 0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <span>{submitting ? 'Opening Passbook...' : 'Open My Khata Passbook'}</span>
+              <ArrowRight size={16} />
+            </button>
+          </form>
+
+          {switching && user && (
+            <div style={{ marginTop: '12px', textAlign: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setSwitching(false)}
+                className="btn-secondary"
+                style={{ fontSize: '0.82rem', padding: '6px 14px' }}
+              >
+                Cancel & Return to {user.name}
+              </button>
+            </div>
+          )}
+
+          <div style={{ marginTop: '22px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '8px' }}>
+              Quick Evaluator Demo Access:
+            </span>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => handleDemoSelect('customer1')}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '0.75rem',
+                  color: '#93c5fd',
+                  cursor: 'pointer'
+                }}
+              >
+                ⚡ Rahul Verma (9812345678)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDemoSelect('customer2')}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '0.75rem',
+                  color: '#93c5fd',
+                  cursor: 'pointer'
+                }}
+              >
+                ⚡ Priya Sharma (9876543211)
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
@@ -66,13 +269,22 @@ export default function CustomerDashboard() {
             My Credit Khata
           </h1>
           <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
-            Welcome, <strong>{user?.name || user?.username}</strong> • Verified Digital Credit Ledger
+            Welcome, <strong>{user?.name || user?.username}</strong> {user?.phone ? `(📱 ${user.phone})` : ''} • Verified Digital Credit Ledger
           </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button 
-            onClick={fetchData} 
+            onClick={() => setSwitching(true)} 
+            className="btn-secondary" 
+            style={{ padding: '9px 12px', fontSize: '0.82rem' }}
+            title="Switch Account"
+          >
+            <User size={14} />
+            <span>Switch Account</span>
+          </button>
+          <button 
+            onClick={() => fetchData(false)} 
             className="btn-secondary" 
             style={{ padding: '9px 14px' }}
             title="Refresh Data"

@@ -16,17 +16,17 @@ import {
   Sparkles,
   User,
   Phone,
-  HelpCircle,
-  ShoppingBag,
-  Zap,
   Check,
-  X
+  X,
+  Edit3,
+  ArrowRight,
+  UserCheck
 } from 'lucide-react';
 
 export default function VerifyTransaction() {
   const { token } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, quickLoginAs } = useAuth();
+  const { user, isAuthenticated, loginCustomer, quickLoginAs } = useAuth();
 
   const [transaction, setTransaction] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,30 +35,28 @@ export default function VerifyTransaction() {
   const [showDisputeInput, setShowDisputeInput] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState('rahul_v'); // 'rahul_v' or 'priya_s'
 
-  const fetchAndClaim = async () => {
+  // Real Customer Input State
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const fetchBill = async () => {
     setLoading(true);
     setError('');
     const cleanToken = (token || '').trim();
     try {
-      // 1. Fetch transaction
       const data = await api.transactions.verify(cleanToken);
-      
-      // 2. If customer is authenticated and transaction not yet linked, claim it!
+      setTransaction(data);
+
+      // Pre-fill customer state if already known or logged in
       if (isAuthenticated && user?.role === 'CUSTOMER') {
-        if (!data.customer || !data.customer_name) {
-          const claimRes = await api.transactions.claim(cleanToken, {
-            customer: user.id,
-            customer_name: user.name,
-            customer_phone: user.phone
-          });
-          setTransaction(claimRes.transaction);
-        } else {
-          setTransaction(data);
-        }
-      } else {
-        setTransaction(data);
+        setCustomerName(user.name || '');
+        setCustomerPhone(user.phone || '');
+      } else if (data.customer_name || data.customer_phone) {
+        setCustomerName(data.customer_name || '');
+        setCustomerPhone(data.customer_phone || '');
       }
     } catch (err) {
       console.warn('Verify transaction error:', err);
@@ -69,21 +67,37 @@ export default function VerifyTransaction() {
   };
 
   useEffect(() => {
-    fetchAndClaim();
+    fetchBill();
   }, [token, isAuthenticated]);
 
-  const handleSelectCustomer = async (custKey) => {
-    setSelectedCustomer(custKey);
-    if (!isAuthenticated || user?.role !== 'CUSTOMER') {
-      await quickLoginAs(custKey === 'rahul_v' ? 'customer1' : 'customer2');
-    }
+  // Evaluator Quick-Fill Helper (Optional test chip)
+  const handleQuickFill = (name, phone) => {
+    setCustomerName(name);
+    setCustomerPhone(phone);
+    setFormError('');
   };
 
   const handleRespond = async (action) => {
-    let activeCustomer = user;
-    if (!isAuthenticated || user?.role !== 'CUSTOMER') {
-      // Ensure session is set to the customer so ProtectedRoute permits /customer
-      activeCustomer = await quickLoginAs(selectedCustomer === 'priya_s' ? 'customer2' : 'customer1');
+    setFormError('');
+    let finalName = customerName.trim();
+    let finalPhone = customerPhone.trim().replace(/\D/g, '');
+
+    // Fall back to active customer session if inputs were blank
+    if (!finalName && isAuthenticated && user?.role === 'CUSTOMER') {
+      finalName = user.name;
+    }
+    if (!finalPhone && isAuthenticated && user?.role === 'CUSTOMER') {
+      finalPhone = (user.phone || '').replace(/\D/g, '');
+    }
+
+    // Real-world validation
+    if (!finalName) {
+      setFormError('Please enter your full name so this bill is saved to your Khata.');
+      return;
+    }
+    if (!finalPhone || finalPhone.length !== 10) {
+      setFormError('Please enter a valid 10-digit mobile number (e.g. 9876543210).');
+      return;
     }
 
     if (action === 'DISPUTE' && !disputeReason.trim()) {
@@ -94,20 +108,31 @@ export default function VerifyTransaction() {
     setSubmitting(true);
     try {
       const cleanToken = (token || '').trim();
-      const custName = activeCustomer?.name || (selectedCustomer === 'priya_s' ? 'Priya Sharma' : 'Rahul Verma');
-      const custPhone = activeCustomer?.phone || (selectedCustomer === 'priya_s' ? '9876543211' : '9812345678');
-      const custId = activeCustomer?.id || (selectedCustomer === 'priya_s' ? 3 : 2);
 
-      // Link to customer
+      // 1. Authenticate this real customer and persist session
+      let activeCustomer = user;
+      if (!isAuthenticated || user?.role !== 'CUSTOMER' || (user?.phone && user.phone.replace(/\D/g, '') !== finalPhone)) {
+        activeCustomer = await loginCustomer(finalName, finalPhone);
+      }
+
+      // 2. Link transaction to this real customer
       await api.transactions.claim(cleanToken, {
-        customer: custId,
-        customer_name: custName,
-        customer_phone: custPhone
+        customer: activeCustomer?.id,
+        customer_name: finalName,
+        customer_phone: finalPhone
       });
 
-      const res = await api.transactions.respond(cleanToken, action, disputeReason.trim());
+      // 3. Submit customer response (ACCEPT / DISPUTE)
+      const res = await api.transactions.respond(cleanToken, action, disputeReason.trim(), {
+        customer_name: finalName,
+        customer_phone: finalPhone
+      });
+
       setTransaction(res.transaction);
-      setSuccessMessage(res.message);
+      setSuccessMessage(action === 'ACCEPT' 
+        ? `Bill verified and saved to ${finalName}'s Khata!` 
+        : `Bill disputed. Vendor has been alerted.`
+      );
 
       if (action === 'ACCEPT') {
         confetti({
@@ -117,7 +142,7 @@ export default function VerifyTransaction() {
         });
       }
     } catch (err) {
-      alert(err.message || 'Failed to update transaction status.');
+      setFormError(err.message || 'Failed to update transaction status.');
     } finally {
       setSubmitting(false);
     }
@@ -125,7 +150,9 @@ export default function VerifyTransaction() {
 
   const handleGoToCustomerDashboard = async () => {
     if (!isAuthenticated || user?.role !== 'CUSTOMER') {
-      await quickLoginAs(selectedCustomer === 'priya_s' ? 'customer2' : 'customer1');
+      const finalName = customerName.trim() || 'Customer';
+      const finalPhone = customerPhone.trim().replace(/\D/g, '') || '9876543210';
+      await loginCustomer(finalName, finalPhone);
     }
     navigate('/customer');
   };
@@ -160,11 +187,13 @@ export default function VerifyTransaction() {
   const isAccepted = transaction.status === 'ACCEPTED';
   const isDisputed = transaction.status === 'DISPUTED';
 
-  const displayCustName = transaction.customer_name || (user?.role === 'CUSTOMER' ? user.name : (selectedCustomer === 'priya_s' ? 'Priya Sharma' : 'Rahul Verma'));
-  const displayCustPhone = transaction.customer_phone || (user?.role === 'CUSTOMER' ? user.phone : (selectedCustomer === 'priya_s' ? '9876543211' : '9812345678'));
+  const displayCustName = transaction.customer_name || customerName || (user?.role === 'CUSTOMER' ? user.name : 'Customer');
+  const displayCustPhone = transaction.customer_phone || customerPhone || (user?.role === 'CUSTOMER' ? user.phone : '');
+
+  const hasLoggedInMatch = isAuthenticated && user?.role === 'CUSTOMER' && !isEditingCustomer;
 
   return (
-    <div style={{ maxWidth: '580px', margin: '0 auto', padding: '24px 16px' }}>
+    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '24px 16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
         <button 
           onClick={() => navigate(user?.role === 'VENDOR' ? '/vendor' : '/customer')} 
@@ -267,79 +296,226 @@ export default function VerifyTransaction() {
           </div>
         </div>
 
-        {/* Customer Account Selection & Identity Sync */}
+        {/* CUSTOMER ONBOARDING & PASSBOOK LINKAGE SECTION */}
         <div style={{
-          background: 'rgba(56, 189, 248, 0.06)',
-          border: '1px solid rgba(56, 189, 248, 0.25)',
-          borderRadius: '14px',
-          padding: '16px',
+          background: isAccepted ? 'rgba(16, 185, 129, 0.06)' : 'rgba(56, 189, 248, 0.06)',
+          border: `1px solid ${isAccepted ? 'rgba(16, 185, 129, 0.3)' : 'rgba(56, 189, 248, 0.25)'}`,
+          borderRadius: '16px',
+          padding: '18px',
           marginBottom: '24px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isPending ? '12px' : '0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div className="kb-avatar" style={{ width: '40px', height: '40px', fontSize: '0.9rem', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' }}>
-                {displayCustName.slice(0, 2).toUpperCase()}
-              </div>
-              <div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff' }}>
-                  {displayCustName}
-                </div>
-                <div style={{ fontSize: '0.78rem', color: '#93c5fd' }}>
-                  📱 {displayCustPhone}
-                </div>
-              </div>
+          {/* Header of Section */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <UserCheck size={18} color={isAccepted ? '#34d399' : '#38bdf8'} />
+              <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#ffffff' }}>
+                {isAccepted ? 'Linked Customer Khata' : 'Claim & Save to Your Khata'}
+              </span>
             </div>
 
-            <span className="kb-pill" style={{ background: isAccepted ? 'rgba(16, 185, 129, 0.2)' : 'rgba(56, 189, 248, 0.2)', color: isAccepted ? '#34d399' : '#38bdf8' }}>
-              {isAccepted ? '✓ Linked to Khata' : 'Target Account'}
+            <span className="kb-pill" style={{
+              background: isAccepted ? 'rgba(16, 185, 129, 0.2)' : 'rgba(56, 189, 248, 0.2)',
+              color: isAccepted ? '#34d399' : '#38bdf8'
+            }}>
+              {isAccepted ? '✓ Verified Account' : 'Step 2: Customer Identity'}
             </span>
           </div>
 
-          {/* Quick Persona selector if bill is pending */}
-          {isPending && (
-            <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '10px', marginTop: '6px' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '8px' }}>
-                Select customer account to attach this bill:
+          {/* Scenario A: Already Accepted -> Display Confirmed Customer Card */}
+          {isAccepted ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div className="kb-avatar" style={{ width: '42px', height: '42px', fontSize: '0.95rem', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}>
+                  {displayCustName.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff' }}>
+                    {displayCustName}
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#93c5fd' }}>
+                    📱 {displayCustPhone || 'Verified Khata Member'}
+                  </div>
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => handleSelectCustomer('rahul_v')}
-                  style={{
-                    background: selectedCustomer === 'rahul_v' ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255, 255, 255, 0.04)',
-                    border: `1px solid ${selectedCustomer === 'rahul_v' ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)'}`,
-                    borderRadius: '8px',
-                    padding: '8px',
-                    color: selectedCustomer === 'rahul_v' ? '#93c5fd' : '#cbd5e1',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    textAlign: 'left',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <div>Rahul Verma</div>
-                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>9812345678</div>
-                </button>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Shop Credit Added</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#34d399' }}>
+                  +₹{transaction.amount}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Scenario B: Pending Bill -> Real Customer Form or Logged-in State */}
+              {hasLoggedInMatch ? (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div className="kb-avatar" style={{ width: '40px', height: '40px', fontSize: '0.9rem', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' }}>
+                        {user.name ? user.name.slice(0, 2).toUpperCase() : 'CU'}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#ffffff' }}>
+                          {user.name || user.username}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#93c5fd' }}>
+                          📱 {user.phone || 'Customer Account'}
+                        </div>
+                      </div>
+                    </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleSelectCustomer('priya_s')}
-                  style={{
-                    background: selectedCustomer === 'priya_s' ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255, 255, 255, 0.04)',
-                    border: `1px solid ${selectedCustomer === 'priya_s' ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)'}`,
-                    borderRadius: '8px',
-                    padding: '8px',
-                    color: selectedCustomer === 'priya_s' ? '#93c5fd' : '#cbd5e1',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    textAlign: 'left',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <div>Priya Sharma</div>
-                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>9876543211</div>
-                </button>
-              </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingCustomer(true)}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        color: '#93c5fd',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        padding: '5px 10px',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Edit3 size={12} />
+                      <span>Change Mobile</span>
+                    </button>
+                  </div>
+
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '8px' }}>
+                    This credit purchase will be added to your verified digital passbook.
+                  </div>
+                </div>
+              ) : (
+                /* Dynamic Customer Input Form (For ANY walk-in customer!) */
+                <div>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: '1.4' }}>
+                    Enter your <strong>Name</strong> and <strong>10-digit Mobile Number</strong>. Your personal digital Khata book will be created and this bill will be saved in your passbook.
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '4px' }}>
+                        YOUR FULL NAME <span style={{ color: '#f87171' }}>*</span>
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>
+                          <User size={15} />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="e.g. Vikram Singh"
+                          value={customerName}
+                          onChange={e => {
+                            setCustomerName(e.target.value);
+                            setFormError('');
+                          }}
+                          style={{
+                            width: '100%',
+                            background: 'rgba(15, 23, 42, 0.9)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            borderRadius: '8px',
+                            padding: '10px 10px 10px 32px',
+                            color: '#ffffff',
+                            fontSize: '0.88rem',
+                            fontWeight: 600,
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '4px' }}>
+                        MOBILE NUMBER <span style={{ color: '#f87171' }}>*</span>
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>
+                          <Phone size={15} />
+                        </div>
+                        <input
+                          type="tel"
+                          maxLength={10}
+                          placeholder="10-digit number"
+                          value={customerPhone}
+                          onChange={e => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setCustomerPhone(val);
+                            setFormError('');
+                          }}
+                          style={{
+                            width: '100%',
+                            background: 'rgba(15, 23, 42, 0.9)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            borderRadius: '8px',
+                            padding: '10px 10px 10px 32px',
+                            color: '#ffffff',
+                            fontSize: '0.88rem',
+                            fontWeight: 600,
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Optional Evaluator Quick-Fill Chips */}
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', paddingTop: '4px' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                      Quick Auto-fill for Testing:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFill('Rahul Verma', '9812345678')}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        borderRadius: '6px',
+                        padding: '3px 8px',
+                        fontSize: '0.72rem',
+                        color: '#93c5fd',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ⚡ Rahul Verma (9812345678)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFill('Priya Sharma', '9876543211')}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        borderRadius: '6px',
+                        padding: '3px 8px',
+                        fontSize: '0.72rem',
+                        color: '#93c5fd',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ⚡ Priya Sharma (9876543211)
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Form Error Banner */}
+          {formError && (
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              color: '#f87171',
+              fontSize: '0.8rem',
+              marginTop: '12px'
+            }}>
+              {formError}
             </div>
           )}
         </div>
@@ -385,7 +561,15 @@ export default function VerifyTransaction() {
               }}
             >
               <CheckCircle2 size={22} />
-              <span>{submitting ? 'Adding to Khata...' : `Accept & Add to ${displayCustName.split(' ')[0]}'s Khata`}</span>
+              <span>
+                {submitting 
+                  ? 'Saving to Khata...' 
+                  : (customerName.trim() 
+                      ? `Accept & Add to ${customerName.trim().split(' ')[0]}'s Khata` 
+                      : 'Accept & Add to My Khata'
+                    )
+                }
+              </span>
             </button>
 
             {!showDisputeInput ? (
@@ -471,7 +655,7 @@ export default function VerifyTransaction() {
             </button>
 
             <Link
-              to={`/ledger?phone=${displayCustPhone}`}
+              to={`/ledger?phone=${displayCustPhone || customerPhone}`}
               className="btn-secondary"
               style={{ width: '100%', padding: '10px', fontSize: '0.85rem', display: 'flex', justifyContent: 'center', gap: '6px' }}
             >
