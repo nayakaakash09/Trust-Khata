@@ -3,6 +3,7 @@
 
 const STORAGE_KEY_TXS = 'trust_khata_demo_txs_v2';
 const STORAGE_KEY_NOTIFS = 'trust_khata_demo_notifs_v2';
+const STORAGE_KEY_USERS = 'trust_khata_users_v2';
 
 const DEMO_USERS = {
   sharma_kirana: {
@@ -39,6 +40,24 @@ const DEMO_USERS = {
     }
   }
 };
+
+function getStoredUsers() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_USERS);
+    if (raw) return { ...DEMO_USERS, ...JSON.parse(raw) };
+  } catch (e) {}
+  return DEMO_USERS;
+}
+
+function saveStoredUser(user) {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_USERS);
+    const existing = raw ? JSON.parse(raw) : {};
+    existing[user.username] = user;
+    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(existing));
+  } catch (e) {}
+}
+
 
 const INITIAL_TRANSACTIONS = [
   {
@@ -249,13 +268,15 @@ function formatTxWithQR(tx) {
 
 export const mockBackend = {
   login: async (credentials) => {
-    const username = credentials.username || 'sharma_kirana';
-    const user = DEMO_USERS[username] || {
+    const rawUsername = (credentials.username || 'sharma_kirana').trim().toLowerCase();
+    const users = getStoredUsers();
+    const matchedKey = Object.keys(users).find(k => k.toLowerCase() === rawUsername);
+    const user = (matchedKey ? users[matchedKey] : null) || {
       id: 99,
-      username,
-      name: username.replace('_', ' ').toUpperCase(),
-      role: username.includes('vendor') || username === 'sharma_kirana' ? 'VENDOR' : 'CUSTOMER',
-      vendor_profile: { shop_name: `${username}'s Store`, upi_id: `${username}@upi` },
+      username: rawUsername,
+      name: rawUsername.replace(/[_.-]/g, ' ').toUpperCase(),
+      role: (rawUsername.includes('vendor') || rawUsername.includes('shop') || rawUsername === 'sharma_kirana') ? 'VENDOR' : 'CUSTOMER',
+      vendor_profile: { shop_name: `${rawUsername}'s Store`, upi_id: `${rawUsername}@upi` },
       customer_profile: { address: 'Local Resident' }
     };
     return {
@@ -264,6 +285,7 @@ export const mockBackend = {
       user
     };
   },
+
 
   getProfile: async () => {
     const raw = localStorage.getItem('user_info');
@@ -604,24 +626,25 @@ export const mockBackend = {
   },
 
   register: async (userData) => {
-    const username = userData.username;
+    const rawUsername = (userData.username || '').trim().toLowerCase();
     const isVendor = (userData.role || 'VENDOR') === 'VENDOR';
     const newUser = {
       id: Date.now(),
-      username,
-      name: userData.name || username,
+      username: rawUsername,
+      name: userData.name || rawUsername,
       phone: userData.phone || '9876543210',
       role: userData.role || 'VENDOR',
       vendor_profile: isVendor ? {
-        shop_name: userData.shop_name || `${userData.name || username}'s Store`,
+        shop_name: userData.shop_name || `${userData.name || rawUsername}'s Store`,
         shop_category: userData.shop_category || 'Grocery & Provisions',
         address: userData.address || 'Market Center',
-        upi_id: userData.upi_id || `${username}@upi`
+        upi_id: userData.upi_id || `${rawUsername}@upi`
       } : undefined,
       customer_profile: !isVendor ? {
         address: userData.address || 'Local Resident'
       } : undefined
     };
+    saveStoredUser(newUser);
     return {
       access: 'mock-jwt-token-' + Date.now(),
       refresh: 'mock-refresh-token-' + Date.now(),
@@ -667,11 +690,16 @@ export const mockBackend = {
   },
 
   sendReminder: async (transaction_id, message = '') => {
+    const txs = getStoredTransactions();
+    const tx = txs.find(t => String(t.id) === String(transaction_id)) || txs[0];
+    const preview = message || `Hello ${tx?.customer_name || 'Customer'}, this is a gentle reminder from ${tx?.shop_name || 'Sharma Kirana'} regarding your pending credit balance of Rs. ${tx?.remaining_balance || '0.00'}. Kindly settle at your convenience. Thank you!`;
     return {
       status: 'sent',
-      message: 'Reminder successfully sent to customer via SMS and WhatsApp!'
+      message: 'Reminder successfully sent to customer via SMS and WhatsApp!',
+      preview_text: preview
     };
   },
+
 
   markRead: async (id) => {
     return { status: 'success' };

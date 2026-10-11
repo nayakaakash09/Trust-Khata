@@ -16,7 +16,9 @@ export default function ReminderModal({ transaction, onClose, onSuccess }) {
     try {
       const res = await api.notifications.sendReminder(transaction.id, customMsg);
       const cleanPhone = (transaction.customer_phone || '').replace(/\D/g, '');
-      const encodedText = encodeURIComponent(res.preview_text);
+      const defaultText = `Hello ${transaction.customer_name || 'Customer'}, this is a gentle reminder from ${transaction.shop_name || 'Store'} regarding your pending credit balance of Rs. ${transaction.remaining_balance}. Kindly settle at your convenience. Thank you!`;
+      const previewText = res?.preview_text || customMsg.trim() || defaultText;
+      const encodedText = encodeURIComponent(previewText);
       const url = `https://wa.me/91${cleanPhone}?text=${encodedText}`;
       setWaLink(url);
       setSentSuccess(true);
@@ -27,6 +29,7 @@ export default function ReminderModal({ transaction, onClose, onSuccess }) {
       setSubmitting(false);
     }
   };
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -131,7 +134,7 @@ export default function ReminderModal({ transaction, onClose, onSuccess }) {
               marginBottom: '16px'
             }}>
               <span style={{ fontWeight: 600, color: '#e2e8f0' }}>Preview Template:</span><br />
-              "Namaste {transaction.customer_name}, this is a gentle reminder from {transaction.shop_name} regarding outstanding credit of ₹{transaction.remaining_balance} (Tx #{transaction.id}: {transaction.description}). Kindly settle at your convenience. Thank you!"
+              "Hello {transaction.customer_name}, this is a gentle reminder from {transaction.shop_name} regarding outstanding credit of ₹{transaction.remaining_balance} (Tx #{transaction.id}: {transaction.description}). Kindly settle at your convenience. Thank you!"
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>

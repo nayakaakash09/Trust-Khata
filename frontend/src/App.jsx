@@ -9,13 +9,15 @@ import CreateTransaction from './pages/CreateTransaction';
 import VerifyTransaction from './pages/VerifyTransaction';
 import QRScannerPage from './pages/QRScannerPage';
 import SharedLedger from './pages/SharedLedger';
+import LandingPage from './pages/LandingPage';
 
 function HomeRedirect() {
   const { isAuthenticated, role, loading } = useAuth();
   if (loading) return null;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) return <LandingPage />;
   return role === 'VENDOR' ? <Navigate to="/vendor" replace /> : <Navigate to="/customer" replace />;
 }
+
 
 function ProtectedRoute({ children, allowedRole }) {
   const { isAuthenticated, role, loading } = useAuth();
