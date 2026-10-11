@@ -16,17 +16,19 @@ import {
   Sparkles,
   RefreshCw
 } from 'lucide-react';
-
 export default function CustomerDashboard() {
-  const { user } = useAuth();
+  const { user, quickLoginAs } = useAuth();
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
+      if (user?.role !== 'CUSTOMER') {
+        await quickLoginAs('customer1');
+      }
       const [sumData, txData] = await Promise.all([
         api.transactions.getSummary(),
         api.transactions.list()
@@ -36,12 +38,14 @@ export default function CustomerDashboard() {
     } catch (err) {
       console.error('Failed to load customer dashboard:', err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+    const interval = setInterval(() => fetchData(true), 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const pendingTransactions = transactions.filter(tx => tx.status === 'PENDING');

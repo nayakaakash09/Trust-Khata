@@ -161,11 +161,10 @@ export function getBaseUrl() {
   return 'https://trust-khata-gold.vercel.app';
 }
 
-// Encode bill data inside the token so ANY mobile phone scanning from another screen can reconstruct the bill
+// Compact URL-safe bill encoding for instant cross-device QR scanning
 export function encodeBillToken(data, id) {
   const obj = {
     i: id,
-    k: 'tk-' + Math.random().toString(36).substring(2, 8),
     a: Number(data.amount).toFixed(2),
     d: data.description || 'General Items',
     s: 'Sharma Kirana & General Store',
@@ -176,13 +175,18 @@ export function encodeBillToken(data, id) {
   };
   try {
     const json = JSON.stringify(obj);
-    const b64 = btoa(encodeURIComponent(json))
+    const b64 = btoa(unescape(encodeURIComponent(json)))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
     return 'tk_' + b64;
   } catch (e) {
-    return 'tx-' + Math.random().toString(36).substring(2, 10) + '-' + Date.now();
+    try {
+      const json = JSON.stringify(obj);
+      return 'tk_' + btoa(encodeURIComponent(json)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    } catch (e2) {
+      return 'tx-' + Math.random().toString(36).substring(2, 10) + '-' + Date.now();
+    }
   }
 }
 
@@ -193,7 +197,17 @@ export function decodeBillToken(token) {
   try {
     let b64 = clean.slice(3).replace(/-/g, '+').replace(/_/g, '/');
     while (b64.length % 4) b64 += '=';
-    const json = decodeURIComponent(atob(b64));
+    let raw = atob(b64);
+    let json = '';
+    try {
+      json = decodeURIComponent(escape(raw));
+    } catch (e) {
+      try {
+        json = decodeURIComponent(raw);
+      } catch (e2) {
+        json = raw;
+      }
+    }
     const obj = JSON.parse(json);
     return {
       id: obj.i || 104,
@@ -287,6 +301,14 @@ export const mockBackend = {
   },
 
 
+  getActiveUser: () => {
+    try {
+      const raw = localStorage.getItem('user_info');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+  },
+
   getProfile: async () => {
     const raw = localStorage.getItem('user_info');
     if (raw) return JSON.parse(raw);
@@ -297,6 +319,17 @@ export const mockBackend = {
     let txs = getStoredTransactions();
     const search = (params.search || '').toLowerCase();
     const status = (params.status || '').toUpperCase();
+    const activeUser = mockBackend.getActiveUser();
+
+    // If user is logged in as CUSTOMER and not asking for all transactions, scope to customer
+    if (activeUser && activeUser.role === 'CUSTOMER' && !params.all) {
+      txs = txs.filter(t => 
+        t.customer_phone === activeUser.phone ||
+        t.customer_name === activeUser.name ||
+        t.customer === activeUser.id ||
+        (!t.customer_name && t.status === 'PENDING')
+      );
+    }
 
     if (status) {
       txs = txs.filter(t => t.status === status);
@@ -305,7 +338,8 @@ export const mockBackend = {
       txs = txs.filter(t => 
         (t.customer_name || '').toLowerCase().includes(search) ||
         (t.customer_phone || '').includes(search) ||
-        (t.description || '').toLowerCase().includes(search)
+        (t.description || '').toLowerCase().includes(search) ||
+        (t.shop_name || '').toLowerCase().includes(search)
       );
     }
     return txs.map(formatTxWithQR);
@@ -355,7 +389,69 @@ export const mockBackend = {
 
   getSummary: async () => {
     const txs = getStoredTransactions();
-    
+    const activeUser = mockBackend.getActiveUser();
+    const isCustomer = activeUser && activeUser.role === 'CUSTOMER';
+
+    if (isCustomer) {
+      const customerTxs = txs.filter(t => 
+        t.customer_phone === activeUser.phone ||
+        t.customer_name === activeUser.name ||
+        t.customer === activeUser.id
+      );
+
+      const customerDebt = customerTxs
+        .filter(t => t.status === 'ACCEPTED')
+        .reduce((acc, t) => acc + Number(t.remaining_balance || 0), 0);
+
+      const customerPaid = customerTxs
+        .reduce((acc, t) => acc + Number(t.total_paid || 0), 0);
+
+      // Unique linked shops for this customer
+      const shopMap = {};
+      for (const t of customerTxs) {
+        const sName = t.shop_name || 'Sharma Kirana & General Store';
+        if (!shopMap[sName]) {
+          shopMap[sName] = {
+            vendor_id: t.vendor || 1,
+            vendor_name: t.vendor_name || 'Ramesh Sharma',
+            shop_name: sName,
+            vendor_phone: t.vendor_phone || '9876543210',
+            outstanding_balance: 0,
+            total_transactions: 0
+          };
+        }
+        shopMap[sName].total_transactions += 1;
+        if (t.status === 'ACCEPTED') {
+          shopMap[sName].outstanding_balance += Number(t.remaining_balance || 0);
+        }
+      }
+
+      let linkedShops = Object.values(shopMap).map(s => ({
+        ...s,
+        outstanding_balance: s.outstanding_balance.toFixed(2)
+      }));
+
+      if (linkedShops.length === 0) {
+        linkedShops = [
+          {
+            vendor_id: 1,
+            vendor_name: 'Ramesh Sharma',
+            shop_name: 'Sharma Kirana & General Store',
+            vendor_phone: '9876543210',
+            outstanding_balance: customerDebt.toFixed(2),
+            total_transactions: customerTxs.length
+          }
+        ];
+      }
+
+      return {
+        role: 'CUSTOMER',
+        total_debt_outstanding: customerDebt.toFixed(2),
+        total_paid: customerPaid.toFixed(2),
+        linked_shops: linkedShops
+      };
+    }
+
     // Vendor calculations
     const pendingCount = txs.filter(t => t.status === 'PENDING').length;
     const acceptedCount = txs.filter(t => t.status === 'ACCEPTED').length;
@@ -409,7 +505,7 @@ export const mockBackend = {
         total: txs.length
       },
       customers,
-      // For customer view
+      // For customer view fallback
       total_debt_outstanding: totalOutstanding.toFixed(2),
       total_paid: totalCollected.toFixed(2),
       linked_shops: [
@@ -484,28 +580,59 @@ export const mockBackend = {
 
   claim: async (token, customerData = {}) => {
     const cleanToken = cleanTokenStr(token);
-    const txs = getStoredTransactions();
+    let txs = getStoredTransactions();
     let idx = txs.findIndex(t => t.secure_token === cleanToken || String(t.id) === cleanToken);
     
     if (idx === -1) {
       // Auto-load or recover bill
       await mockBackend.verify(cleanToken);
-      const updatedTxs = getStoredTransactions();
-      idx = updatedTxs.findIndex(t => t.secure_token === cleanToken || String(t.id) === cleanToken);
-      if (idx === -1) idx = 0; // Fallback to first
+      txs = getStoredTransactions();
+      idx = txs.findIndex(t => t.secure_token === cleanToken || String(t.id) === cleanToken);
     }
 
-    const currentTxs = getStoredTransactions();
-    const tx = currentTxs[idx] || currentTxs[0];
-    tx.customer = 2;
-    tx.customer_name = customerData.customer_name || 'Rahul Verma';
-    tx.customer_phone = customerData.customer_phone || '9812345678';
+    if (idx === -1) {
+      const fallback = {
+        id: Date.now(),
+        secure_token: cleanToken,
+        vendor: 1,
+        vendor_name: 'Ramesh Sharma',
+        vendor_phone: '9876543210',
+        shop_name: 'Sharma Kirana & General Store',
+        upi_id: 'sharma.kirana@oksbi',
+        customer: 2,
+        customer_name: 'Rahul Verma',
+        customer_phone: '9812345678',
+        amount: '500.00',
+        description: 'Basmati Rice & Daily Provisions',
+        status: 'PENDING',
+        dispute_reason: '',
+        total_paid: '0.00',
+        remaining_balance: '500.00',
+        payments: [],
+        customer_previous_balance: '2100.00',
+        is_claimed: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      txs.unshift(fallback);
+      idx = 0;
+    }
+
+    const tx = txs[idx];
+    const activeUser = mockBackend.getActiveUser();
+    const custName = customerData.customer_name || (activeUser?.role === 'CUSTOMER' ? activeUser.name : 'Rahul Verma');
+    const custPhone = customerData.customer_phone || (activeUser?.role === 'CUSTOMER' ? activeUser.phone : '9812345678');
+    const custId = customerData.customer || (activeUser?.role === 'CUSTOMER' ? activeUser.id : 2);
+
+    tx.customer = custId;
+    tx.customer_name = custName;
+    tx.customer_phone = custPhone;
     tx.is_claimed = true;
     tx.customer_previous_balance = '2100.00';
     tx.updated_at = new Date().toISOString();
 
-    currentTxs[idx] = tx;
-    saveStoredTransactions(currentTxs);
+    txs[idx] = tx;
+    saveStoredTransactions(txs);
 
     // Broadcast to vendor's screen in real time
     broadcastTxUpdate(cleanToken, {
@@ -523,18 +650,17 @@ export const mockBackend = {
 
   respond: async (token, action, disputeReason = '') => {
     const cleanToken = cleanTokenStr(token);
-    const txs = getStoredTransactions();
+    let txs = getStoredTransactions();
     let idx = txs.findIndex(t => t.secure_token === cleanToken || String(t.id) === cleanToken);
     
     if (idx === -1) {
       await mockBackend.verify(cleanToken);
-      const updatedTxs = getStoredTransactions();
-      idx = updatedTxs.findIndex(t => t.secure_token === cleanToken || String(t.id) === cleanToken);
+      txs = getStoredTransactions();
+      idx = txs.findIndex(t => t.secure_token === cleanToken || String(t.id) === cleanToken);
       if (idx === -1) idx = 0;
     }
 
-    const currentTxs = getStoredTransactions();
-    const tx = currentTxs[idx] || currentTxs[0];
+    const tx = txs[idx];
 
     if (action === 'ACCEPT') {
       tx.status = 'ACCEPTED';
@@ -547,15 +673,33 @@ export const mockBackend = {
       tx.dispute_reason = disputeReason || 'Rejected';
     }
 
+    const activeUser = mockBackend.getActiveUser();
     if (!tx.customer_name) {
-      tx.customer = 2;
-      tx.customer_name = 'Rahul Verma';
-      tx.customer_phone = '9812345678';
+      tx.customer = (activeUser?.role === 'CUSTOMER' ? activeUser.id : 2);
+      tx.customer_name = (activeUser?.role === 'CUSTOMER' ? activeUser.name : 'Rahul Verma');
+      tx.customer_phone = (activeUser?.role === 'CUSTOMER' ? activeUser.phone : '9812345678');
     }
-
+    tx.is_claimed = true;
     tx.updated_at = new Date().toISOString();
-    currentTxs[idx] = tx;
-    saveStoredTransactions(currentTxs);
+
+    txs[idx] = tx;
+    saveStoredTransactions(txs);
+
+    // Also record real notification for the shopkeeper
+    try {
+      const rawN = localStorage.getItem(STORAGE_KEY_NOTIFS);
+      const notifs = rawN ? JSON.parse(rawN) : [];
+      notifs.unshift({
+        id: Date.now(),
+        title: action === 'ACCEPT' ? 'Credit Confirmed' : 'Bill Disputed',
+        message: action === 'ACCEPT'
+          ? `${tx.customer_name} verified and accepted credit entry of Rs. ${tx.amount}.`
+          : `${tx.customer_name} disputed entry: "${disputeReason || 'Wrong items'}"`,
+        is_read: false,
+        created_at: new Date().toISOString()
+      });
+      localStorage.setItem(STORAGE_KEY_NOTIFS, JSON.stringify(notifs.slice(0, 20)));
+    } catch (e) {}
 
     // Broadcast confirmation to vendor's screen in real time
     broadcastTxUpdate(cleanToken, {

@@ -413,24 +413,46 @@ export default function QRModal({ transaction, onClose }) {
                 <span>{copied ? "Verification Link Copied!" : "Copy Bill Link"}</span>
               </button>
 
-              {/* 1-Click Simulation Buttons */}
+              {/* Prominent customer launcher for instant 1-click test */}
+              <button
+                onClick={handleOpenCustomerScreen}
+                style={{
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '13px 18px',
+                  fontWeight: 800,
+                  fontSize: '0.92rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 18px rgba(16, 185, 129, 0.4)',
+                  cursor: 'pointer'
+                }}
+              >
+                <ExternalLink size={16} />
+                <span>Open Customer Screen to Verify & Add to Khata →</span>
+              </button>
+
+              {/* 1-Click In-Modal Simulation Buttons */}
               {!isCustomerAttached ? (
                 <button
                   onClick={handleSimulateScan}
                   disabled={simulating}
                   style={{
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                    color: '#ffffff',
-                    border: 'none',
+                    background: 'rgba(59, 130, 246, 0.15)',
+                    color: '#93c5fd',
+                    border: '1px solid rgba(59, 130, 246, 0.35)',
                     borderRadius: '10px',
                     padding: '10px 16px',
                     fontWeight: 700,
-                    fontSize: '0.88rem',
+                    fontSize: '0.85rem',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '8px',
-                    boxShadow: '0 4px 15px rgba(59, 130, 246, 0.35)',
                     cursor: 'pointer'
                   }}
                 >
@@ -441,30 +463,25 @@ export default function QRModal({ transaction, onClose }) {
                 <button
                   onClick={handleSimulateAccept}
                   disabled={simulating}
-                  className="btn-primary"
-                  style={{ width: '100%', padding: '11px', fontSize: '0.92rem' }}
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    color: '#34d399',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    borderRadius: '10px',
+                    padding: '11px 16px',
+                    fontWeight: 800,
+                    fontSize: '0.88rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    cursor: 'pointer'
+                  }}
                 >
                   <CheckCircle2 size={16} />
                   <span>{simulating ? 'Accepting...' : '⚡ 1-Click Confirm & Accept as Rahul'}</span>
                 </button>
               )}
-
-              {/* Customer screen launcher */}
-              <button
-                onClick={handleOpenCustomerScreen}
-                style={{
-                  color: 'var(--text-muted)',
-                  fontSize: '0.78rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '4px',
-                  padding: '6px'
-                }}
-              >
-                <ExternalLink size={13} />
-                <span>Open Customer Verification View</span>
-              </button>
             </>
           )}
         </div>

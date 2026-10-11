@@ -19,13 +19,10 @@ function HomeRedirect() {
 }
 
 
-function ProtectedRoute({ children, allowedRole }) {
-  const { isAuthenticated, role, loading } = useAuth();
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth();
   if (loading) return null;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (allowedRole && role !== allowedRole) {
-    return <Navigate to={role === 'VENDOR' ? '/vendor' : '/customer'} replace />;
-  }
   return children;
 }
 

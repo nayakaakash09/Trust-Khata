@@ -62,7 +62,7 @@ export default function QRScannerPage() {
 
     setClaiming(true);
     try {
-      if (!isAuthenticated) {
+      if (!isAuthenticated || user?.role !== 'CUSTOMER') {
         await quickLoginAs('customer1');
       }
       // Explicitly claim/link customer so vendor's screen shows the customer immediately!

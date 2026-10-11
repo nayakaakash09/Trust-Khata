@@ -50,8 +50,8 @@ export default function VendorDashboard() {
   const [selectedTxForPayment, setSelectedTxForPayment] = useState(null);
   const [selectedTxForReminder, setSelectedTxForReminder] = useState(null);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
       const [sumData, txData] = await Promise.all([
         api.transactions.getSummary(),
@@ -62,12 +62,14 @@ export default function VendorDashboard() {
     } catch (err) {
       console.error('Failed to load vendor dashboard:', err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+    const interval = setInterval(() => fetchData(true), 3000);
+    return () => clearInterval(interval);
   }, [search]);
 
   // Dynamic avatar color generator for customers
