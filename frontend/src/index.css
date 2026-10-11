@@ -435,3 +435,31 @@ button {
   background: radial-gradient(circle, transparent, transparent 50%, #ffffff 50%, #ffffff 100%);
   background-size: 16px 16px;
 }
+
+/* Animated QR Scanner Beam */
+@keyframes qrScanLaser {
+  0% {
+    top: 6%;
+    opacity: 0.9;
+  }
+  50% {
+    top: 92%;
+    opacity: 1;
+  }
+  100% {
+    top: 6%;
+    opacity: 0.9;
+  }
+}
+
+.qr-scan-laser-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 0%, #10b981 20%, #34d399 50%, #10b981 80%, transparent 100%);
+  box-shadow: 0 0 15px #10b981, 0 0 25px rgba(52, 211, 153, 0.8);
+  animation: qrScanLaser 2.2s ease-in-out infinite;
+  z-index: 10;
+}
+
