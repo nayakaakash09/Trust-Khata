@@ -140,63 +140,74 @@ export default function CustomerDashboard() {
         </div>
       )}
 
-      {/* Metrics Row */}
+      {/* Metrics Row (Khatabook Customer View) */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: '16px',
         marginBottom: '28px'
       }}>
         {/* Total Outstanding Credit Debt */}
-        <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
+        <div className="kb-card" style={{
+          padding: '22px',
+          borderLeft: '5px solid #ef4444',
+          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(18, 24, 38, 0.95) 100%)'
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              Total Outstanding Balance
+            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              YOU WILL PAY
             </span>
-            <div style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', padding: '6px', borderRadius: '8px' }}>
+            <div style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', padding: '6px', borderRadius: '8px' }}>
               <IndianRupee size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#fbbf24' }}>
-            ₹{summary ? Number(summary.total_debt_outstanding).toLocaleString() : '0.00'}
+          <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#ef4444' }}>
+            ₹{summary ? Number(summary.total_debt_outstanding).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             Current total credit balance across all local shops
           </div>
         </div>
 
         {/* Total Settled */}
-        <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #10b981' }}>
+        <div className="kb-card" style={{
+          padding: '22px',
+          borderLeft: '5px solid #10b981',
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(18, 24, 38, 0.95) 100%)'
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              Total Paid & Settled
+            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              TOTAL SETTLED
             </span>
             <div style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', padding: '6px', borderRadius: '8px' }}>
               <CheckCircle2 size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#34d399' }}>
-            ₹{summary ? Number(summary.total_paid).toLocaleString() : '0.00'}
+          <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#10b981' }}>
+            ₹{summary ? Number(summary.total_paid).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             Verified settled payments
           </div>
         </div>
 
         {/* Linked Shops */}
-        <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #6366f1' }}>
+        <div className="kb-card" style={{
+          padding: '22px',
+          borderLeft: '5px solid #38bdf8'
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              Linked Shops
+            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              LINKED SHOPS
             </span>
-            <div style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '6px', borderRadius: '8px' }}>
+            <div style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '6px', borderRadius: '8px' }}>
               <Store size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#818cf8' }}>
-            {summary?.linked_shops?.length || 0} <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-muted)' }}>merchants</span>
+          <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#38bdf8' }}>
+            {summary?.linked_shops?.length || 0} <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-muted)' }}>merchants</span>
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             Active trusted local stores
           </div>
         </div>

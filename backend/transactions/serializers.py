@@ -41,6 +41,8 @@ class TransactionSerializer(serializers.ModelSerializer):
     payments = PaymentRecordSerializer(many=True, read_only=True)
     qr_code = serializers.SerializerMethodField()
     verification_url = serializers.SerializerMethodField()
+    customer_previous_balance = serializers.SerializerMethodField()
+    is_claimed = serializers.SerializerMethodField()
 
     class Meta:
         model = Transaction
@@ -64,6 +66,8 @@ class TransactionSerializer(serializers.ModelSerializer):
             'payments',
             'qr_code',
             'verification_url',
+            'customer_previous_balance',
+            'is_claimed',
             'created_at',
             'updated_at',
         ]
@@ -81,6 +85,8 @@ class TransactionSerializer(serializers.ModelSerializer):
             'payments',
             'qr_code',
             'verification_url',
+            'customer_previous_balance',
+            'is_claimed',
             'created_at',
             'updated_at',
         ]
@@ -108,8 +114,25 @@ class TransactionSerializer(serializers.ModelSerializer):
         except Exception:
             return None
 
+    def get_is_claimed(self, obj):
+        return bool(obj.customer is not None or (obj.customer_name and obj.customer_phone))
+
+    def get_customer_previous_balance(self, obj):
+        if not obj.customer:
+            return "0.00"
+        prev_txs = Transaction.objects.filter(
+            vendor=obj.vendor,
+            customer=obj.customer,
+            status=Transaction.STATUS_ACCEPTED
+        ).exclude(id=obj.id)
+        bal = sum(t.remaining_balance for t in prev_txs)
+        return str(bal)
+
 
 class CreateTransactionSerializer(serializers.ModelSerializer):
+    customer_name = serializers.CharField(required=False, allow_blank=True, default='')
+    customer_phone = serializers.CharField(required=False, allow_blank=True, default='')
+
     class Meta:
         model = Transaction
         fields = ['customer_name', 'customer_phone', 'amount', 'description']

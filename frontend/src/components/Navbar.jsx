@@ -7,6 +7,7 @@ import {
   Store, 
   User, 
   PlusCircle, 
+  Zap,
   QrCode, 
   Bell, 
   LogOut, 
@@ -107,8 +108,8 @@ export default function Navbar() {
                   className={location.pathname === '/vendor/create' ? 'btn-primary' : 'btn-secondary'}
                   style={{ padding: '8px 14px', fontSize: '0.85rem' }}
                 >
-                  <PlusCircle size={16} />
-                  <span>New Credit</span>
+                  <Zap size={16} />
+                  <span>Quick Bill QR</span>
                 </Link>
                 <Link 
                   to="/ledger" 

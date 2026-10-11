@@ -1,4 +1,8 @@
-const API_BASE = 'http://127.0.0.1:8000/api';
+const API_BASE = import.meta.env.VITE_API_URL || (
+  typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://127.0.0.1:8000/api'
+    : '/api'
+);
 
 export const getAuthToken = () => localStorage.getItem('access_token');
 export const setAuthToken = (token) => localStorage.setItem('access_token', token);
@@ -57,6 +61,11 @@ export const api = {
     create: (txData) => apiRequest('/transactions/', { method: 'POST', body: JSON.stringify(txData) }),
     getSummary: () => apiRequest('/transactions/summary/'),
     verify: (token) => apiRequest(`/transactions/verify/${token}/`),
+    claim: (token, customerData = {}) => 
+      apiRequest(`/transactions/verify/${token}/claim/`, { 
+        method: 'POST', 
+        body: JSON.stringify(customerData) 
+      }),
     respond: (token, action, dispute_reason = '') => 
       apiRequest(`/transactions/verify/${token}/respond/`, { 
         method: 'POST', 

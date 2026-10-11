@@ -50,7 +50,7 @@ class SendReminderView(APIView):
         custom_note = request.data.get('message', '').strip()
 
         default_msg = (
-            f"Namaste {transaction.customer_name}, this is a gentle reminder from {shop_name} "
+            f"Hello {transaction.customer_name}, this is a gentle reminder from {shop_name} "
             f"regarding outstanding credit of Rs. {transaction.remaining_balance} "
             f"(Tx #{transaction.id}: {transaction.description}). Kindly settle at your convenience. Thank you!"
         )

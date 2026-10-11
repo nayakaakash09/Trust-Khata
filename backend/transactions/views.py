@@ -114,8 +114,85 @@ class TransactionVerifyByTokenView(APIView):
             Transaction.objects.prefetch_related('payments'),
             secure_token=token
         )
+        # If an authenticated customer opens this verification link and transaction has no customer yet,
+        # link them automatically so the vendor sees who scanned the QR immediately!
+        if request.user.is_authenticated and request.user.role == 'CUSTOMER':
+            if not transaction.customer:
+                transaction.customer = request.user
+                transaction.customer_name = request.user.name or request.user.username
+                transaction.customer_phone = request.user.phone or ''
+                transaction.save(update_fields=['customer', 'customer_name', 'customer_phone', 'updated_at'])
+
+                Notification.objects.create(
+                    sender=request.user,
+                    recipient=transaction.vendor,
+                    transaction=transaction,
+                    title="Customer Scanned Bill QR",
+                    message=f"{transaction.customer_name} ({transaction.customer_phone}) scanned the QR bill for Rs. {transaction.amount}.",
+                    notification_type=Notification.TYPE_STATUS_UPDATE
+                )
+
         serializer = TransactionSerializer(transaction, context={'request': request})
         return Response(serializer.data)
+
+
+class TransactionClaimView(APIView):
+    """
+    Customer explicitly claims/attaches to a QR transaction upon scanning.
+    Works for authenticated customers, or accepts customer_phone/customer_name.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, token):
+        transaction = get_object_or_404(
+            Transaction.objects.prefetch_related('payments'),
+            secure_token=token
+        )
+
+        user = request.user if request.user.is_authenticated else None
+        phone = request.data.get('customer_phone', '').strip()
+        name = request.data.get('customer_name', '').strip()
+
+        customer_user = None
+        if user and user.role == 'CUSTOMER':
+            customer_user = user
+            customer_name = user.name or user.username
+            customer_phone = user.phone or ''
+        elif phone:
+            customer_user = User.objects.filter(phone=phone, role='CUSTOMER').first()
+            customer_name = name or (customer_user.name if customer_user else 'Customer')
+            customer_phone = phone
+        else:
+            return Response(
+                {"error": "Please provide customer phone or log in as customer to claim."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not transaction.customer and customer_user:
+            transaction.customer = customer_user
+        if customer_name:
+            transaction.customer_name = customer_name
+        if customer_phone:
+            transaction.customer_phone = customer_phone
+        
+        transaction.save(update_fields=['customer', 'customer_name', 'customer_phone', 'updated_at'])
+
+        # Notify vendor
+        sender_user = customer_user or transaction.vendor
+        Notification.objects.create(
+            sender=sender_user,
+            recipient=transaction.vendor,
+            transaction=transaction,
+            title="Customer Scanned Bill QR",
+            message=f"{transaction.customer_name} ({transaction.customer_phone}) scanned the QR bill for Rs. {transaction.amount}.",
+            notification_type=Notification.TYPE_STATUS_UPDATE
+        )
+
+        serializer = TransactionSerializer(transaction, context={'request': request})
+        return Response({
+            "message": f"Bill linked to {transaction.customer_name} successfully.",
+            "transaction": serializer.data
+        })
 
 
 class TransactionRespondView(APIView):

@@ -33,8 +33,8 @@ class Transaction(models.Model):
         blank=True,
         related_name='customer_transactions'
     )
-    customer_name = models.CharField(max_length=150)
-    customer_phone = models.CharField(max_length=15)
+    customer_name = models.CharField(max_length=150, blank=True, default='')
+    customer_phone = models.CharField(max_length=15, blank=True, default='')
     
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField(blank=True)

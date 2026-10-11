@@ -3,6 +3,7 @@ from .views import (
     TransactionListCreateView,
     TransactionDetailView,
     TransactionVerifyByTokenView,
+    TransactionClaimView,
     TransactionRespondView,
     RecordPaymentView,
     LedgerSummaryView
@@ -14,5 +15,6 @@ urlpatterns = [
     path('<int:pk>/', TransactionDetailView.as_view(), name='transaction_detail'),
     path('<int:pk>/payments/', RecordPaymentView.as_view(), name='record_payment'),
     path('verify/<uuid:token>/', TransactionVerifyByTokenView.as_view(), name='transaction_verify'),
+    path('verify/<uuid:token>/claim/', TransactionClaimView.as_view(), name='transaction_claim'),
     path('verify/<uuid:token>/respond/', TransactionRespondView.as_view(), name='transaction_respond'),
 ]

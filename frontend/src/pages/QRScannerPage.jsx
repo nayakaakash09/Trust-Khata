@@ -2,29 +2,44 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { QrCode, Camera, ArrowRight, Sparkles, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { 
+  QrCode, 
+  Camera, 
+  ArrowRight, 
+  Sparkles, 
+  CheckCircle2, 
+  AlertCircle, 
+  RefreshCw,
+  ShoppingBag,
+  IndianRupee,
+  Store
+} from 'lucide-react';
 
 export default function QRScannerPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated, quickLoginAs } = useAuth();
   const [manualCode, setManualCode] = useState('');
   const [pendingTxns, setPendingTxns] = useState([]);
   const [cameraActive, setCameraActive] = useState(false);
   const [scanError, setScanError] = useState('');
+  const [claiming, setClaiming] = useState(false);
   const videoRef = useRef(null);
 
-  useEffect(() => {
-    // Load pending transactions for current user to enable 1-click verification
+  const loadPending = () => {
+    // Load pending transactions to enable 1-click verification during testing
     api.transactions.list({ status: 'PENDING' })
       .then(list => setPendingTxns(list || []))
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadPending();
   }, []);
 
-  const handleResolveCode = (code) => {
+  const handleResolveCode = async (code) => {
     const raw = (code || manualCode).trim();
     if (!raw) return;
 
-    // Check if user entered URL or raw token or 'trustkhata:tx:<token>'
     let token = raw;
     if (raw.includes('/verify/')) {
       const parts = raw.split('/verify/');
@@ -33,7 +48,19 @@ export default function QRScannerPage() {
       token = raw.replace('trustkhata:tx:', '');
     }
 
-    navigate(`/verify/${token}`);
+    setClaiming(true);
+    try {
+      if (!isAuthenticated) {
+        await quickLoginAs('customer1');
+      }
+      // Explicitly claim/link customer so vendor's screen shows the customer immediately!
+      await api.transactions.claim(token);
+    } catch (e) {
+      // Continue to verify screen
+    } finally {
+      setClaiming(false);
+      navigate(`/verify/${token}`);
+    }
   };
 
   const startCamera = async () => {
@@ -45,7 +72,7 @@ export default function QRScannerPage() {
         setCameraActive(true);
       }
     } catch (err) {
-      setScanError('Unable to access camera. You can paste the code or use 1-click below.');
+      setScanError('Unable to access camera in this browser. You can paste the code or use 1-click test bills below.');
     }
   };
 
@@ -57,41 +84,41 @@ export default function QRScannerPage() {
   };
 
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '32px 16px' }}>
-      <div className="glass-panel" style={{ padding: '32px', textAlign: 'center' }}>
+    <div style={{ maxWidth: '620px', margin: '0 auto', padding: '24px 16px' }}>
+      <div className="kb-card" style={{ padding: '32px', textAlign: 'center' }}>
         <div style={{
           width: '56px',
           height: '56px',
           borderRadius: '16px',
-          background: 'rgba(16, 185, 129, 0.15)',
-          color: '#34d399',
+          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          color: '#ffffff',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           margin: '0 auto 16px',
-          border: '1px solid rgba(16, 185, 129, 0.3)'
+          boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)'
         }}>
           <QrCode size={28} />
         </div>
 
-        <h2 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '6px' }}>
+        <h2 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '6px', color: '#ffffff' }}>
           Scan Shopkeeper QR Code
         </h2>
-        <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
-          Scan the QR displayed on the shopkeeper's phone or counter to review and accept the credit entry.
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
+          Scan the QR displayed on the shopkeeper's counter or phone. Your details will automatically connect to review the credit entry.
         </p>
 
-        {/* Camera Scanner Viewport */}
+        {/* Camera Viewport */}
         <div style={{
           position: 'relative',
           width: '100%',
           maxWidth: '360px',
           height: '240px',
-          margin: '0 auto 24px',
+          margin: '0 auto 20px',
           borderRadius: '16px',
           overflow: 'hidden',
           background: '#090d16',
-          border: '2px dashed var(--border-glow)',
+          border: '2px dashed rgba(56, 189, 248, 0.5)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
@@ -101,29 +128,49 @@ export default function QRScannerPage() {
               ref={videoRef} 
               autoPlay 
               playsInline 
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (
-            <div style={{ padding: '20px' }}>
-              <Camera size={38} color="#64748b" style={{ margin: '0 auto 8px' }} />
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '12px' }}>
-                Camera is off
-              </div>
-              <button onClick={startCamera} className="btn-secondary" style={{ padding: '8px 16px', fontSize: '0.8rem' }}>
-                Start Camera
+            <div style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '16px' }}>
+              <Camera size={36} style={{ margin: '0 auto 8px', opacity: 0.6 }} />
+              <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Camera Stream Inactive</div>
+              <button 
+                onClick={startCamera} 
+                className="btn-primary" 
+                style={{ marginTop: '12px', padding: '7px 16px', fontSize: '0.82rem' }}
+              >
+                Enable Camera
               </button>
             </div>
+          )}
+
+          {cameraActive && (
+            <button
+              onClick={stopCamera}
+              style={{
+                position: 'absolute',
+                bottom: '10px',
+                right: '10px',
+                background: 'rgba(0,0,0,0.7)',
+                color: '#fff',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '0.75rem'
+              }}
+            >
+              Stop Camera
+            </button>
           )}
         </div>
 
         {scanError && (
           <div style={{
-            background: 'rgba(244, 63, 94, 0.1)',
-            border: '1px solid rgba(244, 63, 94, 0.3)',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
             borderRadius: '8px',
-            padding: '8px 12px',
-            color: '#fb7185',
-            fontSize: '0.8rem',
+            padding: '10px 14px',
+            color: '#f87171',
+            fontSize: '0.82rem',
             marginBottom: '20px'
           }}>
             {scanError}
@@ -131,91 +178,105 @@ export default function QRScannerPage() {
         )}
 
         {/* Manual Code / Link Input */}
-        <div style={{
-          background: 'rgba(15, 23, 42, 0.6)',
-          borderRadius: '14px',
-          padding: '20px',
-          textAlign: 'left',
-          marginBottom: '24px'
-        }}>
-          <label className="form-label">Or Paste Transaction Code / Link</label>
+        <div style={{ marginBottom: '28px' }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '8px', textAlign: 'left' }}>
+            OR ENTER QR TOKEN / LINK MANUALLY:
+          </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              placeholder="e.g. 7de26c7c-9bd8-4053... or verification link"
+            <input 
+              type="text" 
+              className="form-input" 
+              placeholder="Paste verification link or token..."
               value={manualCode}
               onChange={e => setManualCode(e.target.value)}
-              className="form-input"
+              style={{ borderRadius: '10px', fontSize: '0.88rem' }}
             />
-            <button
-              onClick={() => handleResolveCode()}
-              disabled={!manualCode.trim()}
+            <button 
+              onClick={() => handleResolveCode()} 
+              disabled={claiming || !manualCode.trim()} 
               className="btn-primary"
-              style={{ padding: '0 20px', whiteSpace: 'nowrap' }}
+              style={{ padding: '0 18px', flexShrink: 0 }}
             >
-              Verify
+              <ArrowRight size={16} />
+              <span>{claiming ? 'Connecting...' : 'Scan'}</span>
             </button>
           </div>
         </div>
 
-        {/* Pending Bills Direct Quick Test */}
-        {pendingTxns.length > 0 && (
-          <div style={{ textAlign: 'left' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.78rem',
-              fontWeight: 700,
-              color: '#34d399',
-              textTransform: 'uppercase',
-              marginBottom: '10px'
-            }}>
-              <Sparkles size={14} />
-              <span>Your Pending Bills Ready For Verification (1-Click)</span>
-            </div>
+        {/* 1-Click Available Active Bills for Testing */}
+        <div style={{ textAlign: 'left', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              Active Bills Awaiting Verification ({pendingTxns.length})
+            </span>
+            <button onClick={loadPending} style={{ color: 'var(--text-dim)', padding: '2px' }} title="Refresh">
+              <RefreshCw size={13} />
+            </button>
+          </div>
 
+          {pendingTxns.length === 0 ? (
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', textAlign: 'center', padding: '16px' }}>
+              No pending bills currently waiting for scan. Generate one from the Vendor screen!
+            </div>
+          ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {pendingTxns.map(tx => (
-                <button
+                <div
                   key={tx.id}
                   onClick={() => handleResolveCode(tx.secure_token)}
                   style={{
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '12px 14px',
-                    borderRadius: '10px',
-                    background: 'rgba(15, 23, 42, 0.7)',
-                    border: '1px solid rgba(16, 185, 129, 0.25)',
-                    color: '#fff',
-                    textAlign: 'left'
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
                   }}
+                  onMouseOver={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.08)'}
+                  onMouseOut={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
                 >
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                      {tx.shop_name} • ₹{tx.amount}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      color: '#34d399',
+                      padding: '8px',
+                      borderRadius: '8px'
+                    }}>
+                      <Store size={16} />
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      {tx.description}
+                    <div>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#ffffff' }}>
+                        {tx.shop_name || 'Sharma Kirana Store'}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        {tx.description || 'Credit Goods'}
+                      </div>
                     </div>
                   </div>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    color: '#34d399',
-                    fontSize: '0.8rem',
-                    fontWeight: 700
-                  }}>
-                    <span>Verify Bill</span>
-                    <ArrowRight size={14} />
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#34d399' }}>
+                      ₹{Number(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </div>
+                    <span style={{
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: '#fff',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '4px 8px',
+                      borderRadius: '6px'
+                    }}>
+                      1-Click Scan
+                    </span>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

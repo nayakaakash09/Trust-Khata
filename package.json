@@ -1,0 +1,10 @@
+{
+  "name": "trust-khata",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Trust Khata - Verified Digital Credit Ledger",
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "dev": "npm --prefix frontend run dev"
+  }
+}

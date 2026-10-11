@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
@@ -7,7 +7,7 @@ import QRModal from '../components/QRModal';
 import PaymentModal from '../components/PaymentModal';
 import ReminderModal from '../components/ReminderModal';
 import { 
-  PlusCircle, 
+  Zap, 
   Search, 
   QrCode, 
   IndianRupee, 
@@ -17,17 +17,32 @@ import {
   CheckCircle2, 
   CreditCard, 
   Bell, 
-  Layers, 
+  ArrowDownLeft,
+  ArrowUpRight,
+  TrendingUp,
+  RefreshCw,
+  MessageCircle,
+  FileText,
+  ShieldCheck,
+  Store,
+  ChevronRight,
   Filter,
-  RefreshCw
+  Plus
 } from 'lucide-react';
 
 export default function VendorDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('ALL');
+  
+  // Khatabook Navigation Tabs: 'CUSTOMERS' | 'TRANSACTIONS' | 'REPORTS'
+  const [mainTab, setMainTab] = useState('CUSTOMERS');
+  
+  // Filters
+  const [customerFilter, setCustomerFilter] = useState('ALL'); // 'ALL' | 'DUE' | 'SETTLED'
+  const [txFilter, setTxFilter] = useState('ALL'); // 'ALL' | 'PENDING' | 'ACCEPTED' | 'DISPUTED' | 'PAID'
   const [search, setSearch] = useState('');
 
   // Modals
@@ -55,397 +70,629 @@ export default function VendorDashboard() {
     fetchData();
   }, [search]);
 
+  // Dynamic avatar color generator for customers
+  const getAvatarColor = (name) => {
+    const colors = [
+      'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+      'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+      'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+      'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
+      'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+      'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+    ];
+    let hash = 0;
+    for (let i = 0; i < (name || '').length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  // Filter Customers
+  const customerList = (summary?.customers || []).filter(c => {
+    const bal = Number(c.outstanding_balance || 0);
+    if (customerFilter === 'DUE') return bal > 0;
+    if (customerFilter === 'SETTLED') return bal === 0;
+    return true;
+  });
+
+  // Filter Transactions
   const filteredTransactions = transactions.filter(tx => {
-    if (activeTab === 'ALL') return true;
-    return tx.status === activeTab;
+    if (txFilter === 'ALL') return true;
+    return tx.status === txFilter;
   });
 
   return (
-    <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
-      {/* Top Banner */}
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
+      {/* KHATABOOK STORE HEADER */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: '16px',
-        marginBottom: '24px'
+        marginBottom: '20px'
       }}>
-        <div>
-          <h1 style={{ fontSize: '1.85rem', fontWeight: 800 }}>
-            {user?.vendor_profile?.shop_name || "Shopkeeper Ledger"}
-          </h1>
-          <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
-            Welcome back, <strong>{user?.name || user?.username}</strong> • Verified Digital Credit Notebook
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{
+            width: '52px',
+            height: '52px',
+            borderRadius: '14px',
+            background: 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ffffff',
+            boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)'
+          }}>
+            <Store size={26} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h1 style={{ fontSize: '1.7rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                {user?.vendor_profile?.shop_name || "Sharma Kirana & General Store"}
+              </h1>
+              <span className="kb-pill" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid #10b981' }}>
+                ✓ Verified Khata
+              </span>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Shopkeeper: <strong>{user?.name || user?.username}</strong> • Verified Digital Credit Ledger
+            </p>
+          </div>
         </div>
 
+        {/* Primary Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button 
             onClick={fetchData} 
             className="btn-secondary" 
-            style={{ padding: '9px 14px' }}
-            title="Refresh Data"
+            style={{ padding: '10px 14px' }}
+            title="Refresh Ledger"
           >
             <RefreshCw size={15} />
             <span>Sync</span>
           </button>
-          <Link to="/vendor/create" className="btn-primary" style={{ padding: '9px 18px' }}>
-            <PlusCircle size={16} />
-            <span>Create Credit Entry</span>
+
+          <Link 
+            to="/vendor/create" 
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: '#ffffff',
+              fontWeight: 700,
+              padding: '11px 20px',
+              borderRadius: '12px',
+              boxShadow: '0 4px 18px rgba(16, 185, 129, 0.4)',
+              transition: 'all 0.2s ease',
+              fontSize: '0.95rem'
+            }}
+          >
+            <Zap size={18} />
+            <span>+ Quick Bill QR</span>
           </Link>
         </div>
       </div>
 
-      {/* Metric Cards Row */}
+      {/* THE ICONIC KHATABOOK TWIN BANNER */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: '16px',
         marginBottom: '28px'
       }}>
-        {/* Outstanding Credit */}
-        <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              Total Outstanding Credit
-            </span>
-            <div style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', padding: '6px', borderRadius: '8px' }}>
-              <IndianRupee size={16} />
+        {/* CARD 1: YOU WILL GET */}
+        <div 
+          className="kb-card" 
+          style={{
+            padding: '24px',
+            borderLeft: '5px solid #ef4444',
+            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(18, 24, 38, 0.95) 100%)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#f87171',
+                padding: '8px',
+                borderRadius: '10px'
+              }}>
+                <ArrowDownLeft size={20} />
+              </div>
+              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f87171', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                YOU WILL GET
+              </span>
             </div>
+            <span className="kb-pill" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+              Outstanding
+            </span>
           </div>
-          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#fbbf24' }}>
-            ₹{summary ? Number(summary.total_outstanding).toLocaleString() : '0.00'}
+
+          <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#ef4444', letterSpacing: '-0.02em' }}>
+            ₹{summary ? Number(summary.total_outstanding).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-            Owed by customers across accepted entries
+
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            Total pending credit to collect from {summary?.customers?.filter(c => Number(c.outstanding_balance) > 0).length || 0} customers
           </div>
         </div>
 
-        {/* Total Collected */}
-        <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #10b981' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              Total Recovered / Settled
-            </span>
-            <div style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', padding: '6px', borderRadius: '8px' }}>
-              <CheckCircle2 size={16} />
+        {/* CARD 2: YOU WILL GIVE / TOTAL SETTLED */}
+        <div 
+          className="kb-card" 
+          style={{
+            padding: '24px',
+            borderLeft: '5px solid #10b981',
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(18, 24, 38, 0.95) 100%)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#34d399',
+                padding: '8px',
+                borderRadius: '10px'
+              }}>
+                <ArrowUpRight size={20} />
+              </div>
+              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#34d399', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                TOTAL SETTLED / DEPOSITED
+              </span>
             </div>
+            <span className="kb-pill" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+              Collected
+            </span>
           </div>
-          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#34d399' }}>
-            ₹{summary ? Number(summary.total_collected).toLocaleString() : '0.00'}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-            Payments collected & deposited
-          </div>
-        </div>
 
-        {/* Pending Customer Verifications */}
-        <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #6366f1' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              Pending Verification
-            </span>
-            <div style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '6px', borderRadius: '8px' }}>
-              <Clock size={16} />
-            </div>
+          <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#10b981', letterSpacing: '-0.02em' }}>
+            ₹{summary ? Number(summary.total_collected).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
           </div>
-          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#818cf8' }}>
-            {summary?.counts?.pending || 0} <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-muted)' }}>entries</span>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-            Waiting for customer QR scan & approval
-          </div>
-        </div>
 
-        {/* Disputed Entries */}
-        <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #f43f5e' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              Disputed Entries
-            </span>
-            <div style={{ background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', padding: '6px', borderRadius: '8px' }}>
-              <AlertTriangle size={16} />
-            </div>
-          </div>
-          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#fb7185' }}>
-            {summary?.counts?.disputed || 0} <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-muted)' }}>bills</span>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-            Customer requested bill adjustment
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            Total payments recovered & entered into ledger
           </div>
         </div>
       </div>
 
-      {/* Customer Balances Quick Breakdown */}
-      {summary?.customers && summary.customers.length > 0 && (
-        <div className="glass-panel" style={{ padding: '20px', marginBottom: '28px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Users size={18} color="#34d399" />
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>Customer Credit Balances</h3>
-            </div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              {summary.customers.length} registered customers
-            </span>
-          </div>
+      {/* KHATABOOK CORE TABS */}
+      <div className="kb-tabs">
+        <button
+          className={`kb-tab-btn ${mainTab === 'CUSTOMERS' ? 'active' : ''}`}
+          onClick={() => setMainTab('CUSTOMERS')}
+        >
+          <Users size={18} />
+          <span>CUSTOMERS</span>
+          <span className="kb-pill" style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#ffffff' }}>
+            {summary?.customers?.length || 0}
+          </span>
+        </button>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '12px'
-          }}>
-            {summary.customers.map((cust, idx) => (
-              <div 
-                key={idx} 
-                style={{
-                  background: 'rgba(15, 23, 42, 0.55)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '12px',
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{cust.name}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                    {cust.phone} • {cust.total_transactions} txns
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{
-                    fontSize: '1.05rem',
-                    fontWeight: 800,
-                    color: Number(cust.outstanding_balance) > 0 ? '#fbbf24' : '#34d399'
-                  }}>
-                    ₹{Number(cust.outstanding_balance).toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>outstanding</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        <button
+          className={`kb-tab-btn ${mainTab === 'TRANSACTIONS' ? 'active' : ''}`}
+          onClick={() => setMainTab('TRANSACTIONS')}
+        >
+          <FileText size={18} />
+          <span>ALL BILLS & QR</span>
+          <span className="kb-pill" style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#ffffff' }}>
+            {transactions.length}
+          </span>
+        </button>
 
-      {/* Transactions Section */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '20px'
-        }}>
-          <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '4px' }}>
-              Transaction Register
-            </h3>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Live synchronized transactions with customer verification status
-            </p>
-          </div>
+        <button
+          className={`kb-tab-btn ${mainTab === 'REPORTS' ? 'active' : ''}`}
+          onClick={() => setMainTab('REPORTS')}
+        >
+          <TrendingUp size={18} />
+          <span>KHATA REPORTS</span>
+        </button>
+      </div>
 
-          {/* Search box */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ position: 'relative', width: '240px' }}>
-              <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '12px' }} />
-              <input
-                type="text"
-                placeholder="Search customer, item..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="form-input"
-                style={{ paddingLeft: '32px', fontSize: '0.85rem' }}
-              />
-            </div>
-          </div>
+      {/* SEARCH BAR & QUICK FILTERS */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '12px',
+        marginBottom: '20px'
+      }}>
+        {/* Search */}
+        <div style={{ position: 'relative', flex: '1', minWidth: '260px', maxWidth: '420px' }}>
+          <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+          <input
+            type="text"
+            className="form-input"
+            placeholder={mainTab === 'CUSTOMERS' ? "Search customer by name or mobile..." : "Search bills by items, customer..."}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ paddingLeft: '38px', borderRadius: '12px', fontSize: '0.88rem' }}
+          />
         </div>
 
-        {/* Filter Tabs */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          overflowX: 'auto',
-          paddingBottom: '8px',
-          marginBottom: '16px'
-        }}>
-          {[
-            { id: 'ALL', label: 'All Transactions' },
-            { id: 'PENDING', label: `Pending (${summary?.counts?.pending || 0})` },
-            { id: 'ACCEPTED', label: `Accepted (${summary?.counts?.accepted || 0})` },
-            { id: 'DISPUTED', label: `Disputed (${summary?.counts?.disputed || 0})` },
-            { id: 'PAID', label: `Paid (${summary?.counts?.paid || 0})` },
-          ].map(tab => (
+        {/* Sub-Filters */}
+        {mainTab === 'CUSTOMERS' && (
+          <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '8px',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-                background: activeTab === tab.id ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.04)',
-                color: activeTab === tab.id ? '#34d399' : 'var(--text-muted)',
-                border: `1px solid ${activeTab === tab.id ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-subtle)'}`
-              }}
+              onClick={() => setCustomerFilter('ALL')}
+              className={`kb-chip ${customerFilter === 'ALL' ? 'active' : ''}`}
             >
-              {tab.label}
+              All Customers ({summary?.customers?.length || 0})
             </button>
-          ))}
-        </div>
+            <button
+              onClick={() => setCustomerFilter('DUE')}
+              className={`kb-chip ${customerFilter === 'DUE' ? 'active' : ''}`}
+              style={customerFilter === 'DUE' ? { background: 'rgba(239, 68, 68, 0.18)', color: '#f87171', borderColor: '#ef4444' } : {}}
+            >
+              Has Dues
+            </button>
+            <button
+              onClick={() => setCustomerFilter('SETTLED')}
+              className={`kb-chip ${customerFilter === 'SETTLED' ? 'active' : ''}`}
+            >
+              Settled (₹0)
+            </button>
+          </div>
+        )}
 
-        {/* Transaction Table / Cards */}
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-            Loading ledger transactions...
-          </div>
-        ) : filteredTransactions.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <Layers size={36} color="#64748b" style={{ margin: '0 auto 12px' }} />
-            <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '4px' }}>No transactions found</h4>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '16px' }}>
-              {activeTab === 'ALL' ? "You haven't recorded any credit entries yet." : `No entries with status '${activeTab}'.`}
-            </p>
-            <Link to="/vendor/create" className="btn-primary" style={{ display: 'inline-flex', padding: '8px 16px' }}>
-              <PlusCircle size={15} />
-              <span>Record First Credit</span>
-            </Link>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {filteredTransactions.map(tx => (
-              <div
-                key={tx.id}
-                style={{
-                  background: 'rgba(15, 23, 42, 0.45)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '14px',
-                  transition: 'border-color 0.2s ease'
-                }}
+        {mainTab === 'TRANSACTIONS' && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {['ALL', 'PENDING', 'ACCEPTED', 'DISPUTED', 'PAID'].map(st => (
+              <button
+                key={st}
+                onClick={() => setTxFilter(st)}
+                className={`kb-chip ${txFilter === st ? 'active' : ''}`}
               >
-                {/* Left Info */}
-                <div style={{ flex: '1 1 300px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 600 }}>#{tx.id}</span>
-                    <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#fff' }}>{tx.customer_name}</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>({tx.customer_phone})</span>
-                    <StatusBadge status={tx.status} size="sm" />
-                  </div>
-
-                  <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '4px' }}>
-                    {tx.description || 'Credit Entry'}
-                  </div>
-
-                  {tx.status === 'DISPUTED' && tx.dispute_reason && (
-                    <div style={{
-                      background: 'rgba(244, 63, 94, 0.1)',
-                      border: '1px solid rgba(244, 63, 94, 0.25)',
-                      borderRadius: '6px',
-                      padding: '6px 10px',
-                      fontSize: '0.78rem',
-                      color: '#fb7185',
-                      marginTop: '6px'
-                    }}>
-                      <strong>Customer Dispute:</strong> {tx.dispute_reason}
-                    </div>
-                  )}
-
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-                    Created on {new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                </div>
-
-                {/* Amount and Balance */}
-                <div style={{ textAlign: 'right', minWidth: '130px' }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>
-                    ₹{tx.amount}
-                  </div>
-                  {tx.status === 'ACCEPTED' && (
-                    <div style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 600 }}>
-                      Bal: ₹{tx.remaining_balance}
-                    </div>
-                  )}
-                  {Number(tx.total_paid) > 0 && (
-                    <div style={{ fontSize: '0.75rem', color: '#34d399' }}>
-                      Paid: ₹{tx.total_paid}
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {tx.status === 'PENDING' && (
-                    <button
-                      onClick={() => setSelectedTxForQR(tx)}
-                      className="btn-primary"
-                      style={{ padding: '7px 12px', fontSize: '0.78rem' }}
-                      title="Show QR Code for Customer"
-                    >
-                      <QrCode size={14} />
-                      <span>Show QR</span>
-                    </button>
-                  )}
-
-                  {tx.status === 'ACCEPTED' && (
-                    <>
-                      <button
-                        onClick={() => setSelectedTxForPayment(tx)}
-                        className="btn-primary"
-                        style={{ padding: '7px 12px', fontSize: '0.78rem', background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
-                        title="Record Payment"
-                      >
-                        <CreditCard size={14} />
-                        <span>Settle</span>
-                      </button>
-                      <button
-                        onClick={() => setSelectedTxForReminder(tx)}
-                        className="btn-secondary"
-                        style={{ padding: '7px 10px', fontSize: '0.78rem' }}
-                        title="Send Reminder"
-                      >
-                        <Bell size={14} color="#fbbf24" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+                {st === 'ALL' ? 'All Bills' : st === 'PENDING' ? '🟡 Awaiting Scan' : st}
+              </button>
             ))}
           </div>
         )}
       </div>
 
+      {/* TAB 1: CUSTOMERS KHATA BOOK */}
+      {mainTab === 'CUSTOMERS' && (
+        <div className="kb-card" style={{ padding: '8px', overflow: 'hidden' }}>
+          {customerList.length === 0 ? (
+            <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <Users size={40} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+              <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>
+                No Customers Found
+              </h4>
+              <p style={{ fontSize: '0.85rem', marginBottom: '16px' }}>
+                Create a quick QR bill for a customer. Once scanned, they will automatically appear in your Khata book!
+              </p>
+              <Link to="/vendor/create" className="btn-primary">
+                <Zap size={16} />
+                <span>+ Create Quick Bill QR</span>
+              </Link>
+            </div>
+          ) : (
+            <div>
+              {customerList.map((c, idx) => {
+                const bal = Number(c.outstanding_balance || 0);
+                const hasDue = bal > 0;
+
+                return (
+                  <div
+                    key={c.phone || c.name || idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '14px',
+                      padding: '16px 20px',
+                      borderBottom: idx === customerList.length - 1 ? 'none' : '1px solid rgba(255, 255, 255, 0.05)',
+                      transition: 'background 0.15s ease',
+                      borderRadius: '12px'
+                    }}
+                    onMouseOver={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'}
+                    onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    {/* Left: Avatar & Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div className="kb-avatar" style={{ background: getAvatarColor(c.name) }}>
+                        {(c.name || 'C').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ffffff', marginBottom: '2px' }}>
+                          {c.name || 'Anonymous Customer'}
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>📱 {c.phone || 'No phone recorded'}</span>
+                          <span>•</span>
+                          <span>{c.total_transactions} Entries</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Balance & Quick Actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{
+                          fontSize: '1.25rem',
+                          fontWeight: 900,
+                          color: hasDue ? '#ef4444' : '#10b981'
+                        }}>
+                          ₹{bal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+                        <span style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: hasDue ? '#f87171' : '#34d399',
+                          textTransform: 'uppercase'
+                        }}>
+                          {hasDue ? "YOU'LL GET" : "SETTLED"}
+                        </span>
+                      </div>
+
+                      {/* Khatabook action buttons */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {hasDue && (
+                          <button
+                            onClick={() => {
+                              // Find an accepted transaction for this customer
+                              const targetTx = transactions.find(t => t.customer_phone === c.phone && t.status === 'ACCEPTED');
+                              if (targetTx) {
+                                setSelectedTxForReminder(targetTx);
+                              } else {
+                                alert(`Customer ${c.name} owes Rs. ${bal}. You can remind them on WhatsApp.`);
+                              }
+                            }}
+                            style={{
+                              background: 'rgba(34, 197, 94, 0.15)',
+                              border: '1px solid rgba(34, 197, 94, 0.3)',
+                              color: '#4ade80',
+                              padding: '8px 12px',
+                              borderRadius: '8px',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                            title="Send WhatsApp Payment Reminder"
+                          >
+                            <MessageCircle size={15} />
+                            <span>Remind</span>
+                          </button>
+                        )}
+
+                        <Link
+                          to={`/ledger?phone=${c.phone}`}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            color: 'var(--text-main)',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <FileText size={14} />
+                          <span>Ledger</span>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: TRANSACTIONS & BILLS */}
+      {mainTab === 'TRANSACTIONS' && (
+        <div className="kb-card" style={{ padding: '8px' }}>
+          {filteredTransactions.length === 0 ? (
+            <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <FileText size={40} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+              <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>
+                No Bills Found
+              </h4>
+              <p style={{ fontSize: '0.85rem' }}>
+                Generate your first digital credit bill with the Quick Bill QR generator.
+              </p>
+            </div>
+          ) : (
+            <div>
+              {filteredTransactions.map((tx, idx) => {
+                const isPendingScan = !tx.customer_name && tx.status === 'PENDING';
+
+                return (
+                  <div
+                    key={tx.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '14px',
+                      padding: '16px 20px',
+                      borderBottom: idx === filteredTransactions.length - 1 ? 'none' : '1px solid rgba(255, 255, 255, 0.05)',
+                      borderRadius: '12px'
+                    }}
+                    onMouseOver={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'}
+                    onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    {/* Left: Details */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div className="kb-avatar" style={{
+                        background: isPendingScan ? 'linear-gradient(135deg, #f59e0b 0%, #b45309 100%)' : getAvatarColor(tx.customer_name)
+                      }}>
+                        {isPendingScan ? 'QR' : (tx.customer_name || 'C').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                          <span style={{ fontSize: '1.02rem', fontWeight: 800, color: '#ffffff' }}>
+                            {tx.customer_name || 'Awaiting Customer Scan...'}
+                          </span>
+                          <StatusBadge status={tx.status} />
+                          {isPendingScan && (
+                            <span className="kb-pill" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid #f59e0b' }}>
+                              Live QR
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ color: '#cbd5e1' }}>🛒 {tx.description || 'Credit Goods'}</span>
+                          <span>•</span>
+                          <span>{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Amount & Actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#ffffff' }}>
+                          ₹{Number(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+                        {tx.status === 'ACCEPTED' && Number(tx.remaining_balance) > 0 && (
+                          <span style={{ fontSize: '0.72rem', color: '#f87171', fontWeight: 700 }}>
+                            Due: ₹{Number(tx.remaining_balance).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          onClick={() => setSelectedTxForQR(tx)}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            color: '#ffffff',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                          title="Show QR Code"
+                        >
+                          <QrCode size={15} />
+                          <span>QR</span>
+                        </button>
+
+                        {tx.status === 'ACCEPTED' && Number(tx.remaining_balance) > 0 && (
+                          <button
+                            onClick={() => setSelectedTxForPayment(tx)}
+                            style={{
+                              background: 'rgba(16, 185, 129, 0.15)',
+                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                              color: '#34d399',
+                              padding: '8px 12px',
+                              borderRadius: '8px',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <CreditCard size={15} />
+                            <span>Got ₹</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: KHATA REPORTS */}
+      {mainTab === 'REPORTS' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          <div className="kb-card" style={{ padding: '24px' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <TrendingUp size={20} color="#38bdf8" />
+              <span>Credit Summary</span>
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Total Credit Issued:</span>
+                <strong style={{ color: '#ffffff' }}>₹{summary ? Number(summary.total_credit_extended).toLocaleString() : '0'}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Total Recovered:</span>
+                <strong style={{ color: '#34d399' }}>₹{summary ? Number(summary.total_collected).toLocaleString() : '0'}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Net Outstanding Dues:</span>
+                <strong style={{ color: '#ef4444' }}>₹{summary ? Number(summary.total_outstanding).toLocaleString() : '0'}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="kb-card" style={{ padding: '24px' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CheckCircle2 size={20} color="#10b981" />
+              <span>Transaction Counts</span>
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '12px', borderRadius: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#38bdf8' }}>{summary?.counts?.total || 0}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total Entries</div>
+              </div>
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '12px', borderRadius: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#34d399' }}>{summary?.counts?.accepted || 0}</div>
+                <div style={{ fontSize: '0.75rem', color: '#34d399' }}>Accepted & Active</div>
+              </div>
+              <div style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '12px', borderRadius: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#818cf8' }}>{summary?.counts?.paid || 0}</div>
+                <div style={{ fontSize: '0.75rem', color: '#818cf8' }}>Fully Settled</div>
+              </div>
+              <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '12px', borderRadius: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fbbf24' }}>{summary?.counts?.pending || 0}</div>
+                <div style={{ fontSize: '0.75rem', color: '#fbbf24' }}>Pending Scan</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modals */}
       {selectedTxForQR && (
-        <QRModal 
-          transaction={selectedTxForQR} 
-          onClose={() => setSelectedTxForQR(null)} 
+        <QRModal
+          transaction={selectedTxForQR}
+          onClose={() => {
+            setSelectedTxForQR(null);
+            fetchData();
+          }}
         />
       )}
 
       {selectedTxForPayment && (
-        <PaymentModal 
-          transaction={selectedTxForPayment} 
-          onClose={() => setSelectedTxForPayment(null)} 
-          onSuccess={fetchData}
+        <PaymentModal
+          transaction={selectedTxForPayment}
+          onClose={() => setSelectedTxForPayment(null)}
+          onSuccess={() => {
+            setSelectedTxForPayment(null);
+            fetchData();
+          }}
         />
       )}
 
       {selectedTxForReminder && (
-        <ReminderModal 
-          transaction={selectedTxForReminder} 
-          onClose={() => setSelectedTxForReminder(null)} 
+        <ReminderModal
+          transaction={selectedTxForReminder}
+          onClose={() => setSelectedTxForReminder(null)}
         />
       )}
     </div>
