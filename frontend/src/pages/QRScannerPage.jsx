@@ -19,6 +19,8 @@ import {
   SwitchCamera
 } from 'lucide-react';
 
+import { cleanTokenStr } from '../services/mockBackend';
+
 export default function QRScannerPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated, quickLoginAs } = useAuth();
@@ -54,13 +56,9 @@ export default function QRScannerPage() {
     const raw = (code || manualCode).trim();
     if (!raw) return;
 
-    let token = raw;
-    if (raw.includes('/verify/')) {
-      const parts = raw.split('/verify/');
-      token = parts[1].split('?')[0].split('#')[0];
-    } else if (raw.startsWith('trustkhata:tx:')) {
-      token = raw.replace('trustkhata:tx:', '');
-    }
+    let token = cleanTokenStr(raw);
+    if (!token) token = raw;
+
 
     setClaiming(true);
     try {

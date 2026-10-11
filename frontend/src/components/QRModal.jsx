@@ -31,9 +31,35 @@ export default function QRModal({ transaction, onClose }) {
   const token = liveTx?.secure_token || transaction?.secure_token;
   const verifyUrl = `${window.location.origin}/verify/${token}`;
 
-  // Poll transaction status every 1.5 seconds to detect live scan and acceptance
+  // Poll and listen to cross-device events to detect live scan and acceptance
   useEffect(() => {
     if (!token) return;
+
+    const cleanToken = String(token).replace(/[^a-zA-Z0-9_-]/g, '').slice(-32);
+    let es = null;
+    try {
+      es = new EventSource(`https://ntfy.sh/tk_tx_${cleanToken}/sse`);
+      es.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.event === 'message' && msg.message) {
+            const payload = JSON.parse(msg.message);
+            setLiveTx(prev => {
+              const updated = { ...prev, ...payload };
+              if (payload.status === 'ACCEPTED' && (!prev || prev.status !== 'ACCEPTED')) {
+                confetti({
+                  particleCount: 120,
+                  spread: 80,
+                  origin: { y: 0.6 }
+                });
+                setAcceptedCelebrated(true);
+              }
+              return updated;
+            });
+          }
+        } catch (err) {}
+      };
+    } catch (e) {}
 
     const interval = setInterval(async () => {
       try {
@@ -55,8 +81,14 @@ export default function QRModal({ transaction, onClose }) {
       }
     }, 1500);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (es) {
+        try { es.close(); } catch (e) {}
+      }
+    };
   }, [token]);
+
 
   if (!liveTx) return null;
 

@@ -38,23 +38,27 @@ export default function VerifyTransaction() {
 
   const fetchAndClaim = async () => {
     setLoading(true);
+    setError('');
+    const cleanToken = (token || '').trim();
     try {
       // 1. Fetch transaction
-      const data = await api.transactions.verify(token);
+      const data = await api.transactions.verify(cleanToken);
       
       // 2. If customer is authenticated and transaction not yet linked, claim it!
       if (isAuthenticated && user?.role === 'CUSTOMER' && !data.customer) {
-        const claimRes = await api.transactions.claim(token);
+        const claimRes = await api.transactions.claim(cleanToken);
         setTransaction(claimRes.transaction);
       } else {
         setTransaction(data);
       }
     } catch (err) {
+      console.warn('Verify transaction error:', err);
       setError(err.message || 'Unable to load transaction details.');
     } finally {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchAndClaim();
