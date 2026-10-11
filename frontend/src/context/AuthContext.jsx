@@ -53,6 +53,16 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const quickLoginAs = async (roleType) => {
+    if (roleType === 'vendor') {
+      return await login('sharma_kirana', 'password123');
+    } else if (roleType === 'customer1') {
+      return await login('rahul_v', 'password123');
+    } else if (roleType === 'customer2') {
+      return await login('priya_s', 'password123');
+    }
+  };
+
   const loginCustomer = async (name, phone) => {
     const cleanPhone = (phone || '').trim().replace(/\D/g, '');
     const cleanName = (name || '').trim();
